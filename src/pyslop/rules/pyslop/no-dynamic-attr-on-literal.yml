@@ -1,0 +1,18 @@
+id: pyslop/no-dynamic-attr-on-literal
+language: python
+severity: error
+rule:
+  any:
+    - pattern: getattr($X, $Y)
+    - pattern: getattr($X, $Y, $D)
+    - pattern: hasattr($X, $Y)
+    - pattern: setattr($X, $Y, $V)
+constraints:
+  Y:
+    all:
+      - kind: string
+      - not:
+          has:
+            kind: interpolation
+message: Dynamic attribute access with a string literal name.
+note: Use a typed attribute access (obj.attr) so the checker can verify it.
