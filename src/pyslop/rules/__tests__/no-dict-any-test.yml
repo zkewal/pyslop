@@ -1,0 +1,36 @@
+# Fixture test for pyslop/no-dict-any.
+# Only parameters and returns are flagged; locals and module-level are allowed.
+id: pyslop/no-dict-any
+valid:
+  - |
+    def foo(x: dict[str, int]):
+        pass
+  - |
+    from typing import Any
+    def foo():
+        x: dict[str, Any] = {}
+        return x
+  - |
+    from typing import Any
+    x: dict[str, Any] = {}
+  - |
+    def foo(x: dict):
+        pass
+invalid:
+  - |
+    from typing import Any
+    def foo(x: dict[str, Any]):
+        pass
+  - |
+    from typing import Any
+    def foo() -> dict[str, Any]:
+        return {}
+  - |
+    from typing import Any, Mapping
+    def foo(x: Mapping[str, Any]):
+        pass
+  - |
+    from typing import Any
+    import typing
+    def foo(x: typing.Dict[str, Any]):
+        pass

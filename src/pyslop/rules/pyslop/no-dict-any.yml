@@ -1,0 +1,19 @@
+id: pyslop/no-dict-any
+language: python
+severity: error
+rule:
+  all:
+    - any:
+        - kind: generic_type
+          regex: "^.*(dict|Dict|Mapping)\\[.+,\\s*(Any|typing\\.Any)\\]$"
+        - kind: subscript
+          regex: "^.*(Dict|Mapping)\\[.+,\\s*(Any|typing\\.Any)\\]$"
+    - inside:
+        kind: function_definition
+        stopBy: end
+    - not:
+        inside:
+          kind: block
+          stopBy: end
+message: Function signature uses dict[str, Any] or Mapping[str, Any].
+note: "Declare a data shape (TypedDict, dataclass, or pydantic model) instead of dict[str, Any] in parameters and returns. Local variables are allowed."

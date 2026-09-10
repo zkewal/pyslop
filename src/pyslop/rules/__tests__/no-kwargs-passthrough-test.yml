@@ -1,0 +1,30 @@
+# Fixture test for pyslop/no-kwargs-passthrough.
+id: pyslop/no-kwargs-passthrough
+valid:
+  - |
+    def _private(**kwargs):
+        pass
+  - |
+    from typing import Unpack
+    def foo(**kwargs: Unpack[TD]):
+        pass
+  - |
+    import typing
+    def foo(**kwargs: typing.Unpack[TD]):
+        pass
+  - |
+    def foo(x: int):
+        pass
+invalid:
+  - |
+    def foo(**kwargs):
+        pass
+  - |
+    def bar(x: int, **kwargs: int):
+        pass
+  - |
+    async def foo(**kwargs):
+        pass
+  - |
+    def method(self, x: int, **kwargs):
+        pass

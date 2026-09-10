@@ -1,0 +1,42 @@
+id: pyslop/no-kwargs-passthrough
+snapshots:
+  ? |
+    async def foo(**kwargs):
+        pass
+  : labels:
+    - source: |-
+        async def foo(**kwargs):
+            pass
+      style: primary
+      start: 0
+      end: 33
+  ? |
+    def bar(x: int, **kwargs: int):
+        pass
+  : labels:
+    - source: |-
+        def bar(x: int, **kwargs: int):
+            pass
+      style: primary
+      start: 0
+      end: 40
+  ? |
+    def foo(**kwargs):
+        pass
+  : labels:
+    - source: |-
+        def foo(**kwargs):
+            pass
+      style: primary
+      start: 0
+      end: 27
+  ? |
+    def method(self, x: int, **kwargs):
+        pass
+  : labels:
+    - source: |-
+        def method(self, x: int, **kwargs):
+            pass
+      style: primary
+      start: 0
+      end: 44
