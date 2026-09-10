@@ -15,3 +15,11 @@ def _private_passthrough(**kwargs):
 
 def no_kwargs_here(title: str):
     return title
+
+
+def unpack_return(**kwargs: Unpack[TourOpts]) -> None:
+    return kwargs
+
+
+def _private_return(**kwargs: int) -> None:
+    return kwargs

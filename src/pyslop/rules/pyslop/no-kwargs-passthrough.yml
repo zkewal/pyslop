@@ -4,12 +4,19 @@ severity: error
 rule:
   any:
     - pattern: "def $F($$$, **$KW): $$$BODY"
+    - pattern: "def $F($$$, **$KW) -> $R: $$$BODY"
     - all:
         - pattern: "def $F($$$, **$KW: $TYPE): $$$BODY"
         - not:
             any:
               - pattern: "def $F($$$, **$KW: Unpack[$$$]): $$$BODY"
               - pattern: "def $F($$$, **$KW: typing.Unpack[$$$]): $$$BODY"
+    - all:
+        - pattern: "def $F($$$, **$KW: $TYPE) -> $R: $$$BODY"
+        - not:
+            any:
+              - pattern: "def $F($$$, **$KW: Unpack[$$$]) -> $R2: $$$BODY"
+              - pattern: "def $F($$$, **$KW: typing.Unpack[$$$]) -> $R2: $$$BODY"
 constraints:
   F:
     regex: "^[^_]"

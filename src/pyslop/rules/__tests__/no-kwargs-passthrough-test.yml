@@ -15,6 +15,17 @@ valid:
   - |
     def foo(x: int):
         pass
+  - |
+    from typing import Unpack
+    def foo(**kwargs: Unpack[TD]) -> None:
+        pass
+  - |
+    import typing
+    async def foo(x, **kwargs: typing.Unpack[TD]) -> str:
+        pass
+  - |
+    def _private(**kwargs: int) -> None:
+        pass
 invalid:
   - |
     def foo(**kwargs):
@@ -27,4 +38,19 @@ invalid:
         pass
   - |
     def method(self, x: int, **kwargs):
+        pass
+  - |
+    def foo(**kwargs) -> None:
+        pass
+  - |
+    async def foo(**kwargs) -> int:
+        pass
+  - |
+    def bar(x: int, **kwargs: int) -> None:
+        pass
+  - |
+    async def bar(x, **kwargs: int) -> str:
+        pass
+  - |
+    def update_tour(tour_id: int, **kwargs: Any) -> None:
         pass

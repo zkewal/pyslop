@@ -9,10 +9,12 @@ import shutil
 import subprocess
 import sys
 import tomllib
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from importlib.metadata import PackageNotFoundError, version
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Any, TypedDict
+
+import pathspec
 
 SAFETY_RULE = "pyslop/require-safety-comment"
 SAFETY_RE = re.compile(r"#\s*SAFETY\s*:\s*\S")
@@ -98,23 +100,54 @@ def has_safety(lines: list[str], lineno: int) -> bool:
     return bool(SAFETY_RE.search(same) or SAFETY_RE.search(prev))
 
 
+TY_SUMMARY_RE = re.compile(r"^Found (?P<count>\d+) diagnostics?$")
+
+
+def _project_root(paths: list[str]) -> Path:
+    """Owning project dir: nearest pyproject parent, else the working dir."""
+    pyproject = nearest_pyproject(_start(paths))
+    if pyproject is not None:
+        return pyproject.parent
+    return Path.cwd()
+
+
+def _consumer_ty_configured(root: Path) -> bool:
+    """True when the project opts into ty config (ty.toml or [tool.ty]).
+
+    `.ty.toml` is deliberately not detected: ty does not support it, so
+    treating it as configuration would suppress strict defaults.
+    """
+    if (root / "ty.toml").is_file():
+        return True
+    try:
+        tool = tomllib.loads((root / "pyproject.toml").read_text()).get("tool", {})
+    except (OSError, tomllib.TOMLDecodeError):
+        return False
+    return isinstance(tool, dict) and "ty" in tool
+
+
 def run_ty(paths: list[str]) -> list[Finding] | None:
-    """Run ty with the shipped strict config; None means the runner itself failed."""
+    """Run ty; None means the runner itself failed.
+
+    Consumer config wins: when the owning project has ty.toml or [tool.ty],
+    ty runs under its own discovery (`--project`) with no extra flags, so
+    the consumer's Python floor, rule levels, and overrides apply. With no
+    consumer config, `--error all` keeps strict defaults (every rule,
+    including ones added after the pin, is an error) while ty infers the
+    floor natively from `requires-python`. No config file is ever forced:
+    the bundled strict `ty.toml` is only the source `init` stamps rules
+    from. A diagnostics signal whose lines do not parse is a runner
+    failure, never a silent green.
+    """
     binary = require_binary("ty")
     if binary is None:
         return None
+    root = _project_root(paths)
+    cmd = [binary, "check", "--project", str(root), "--output-format", "concise"]
+    if not _consumer_ty_configured(root):
+        cmd[2:2] = ["--error", "all"]
     proc = subprocess.run(
-        [
-            binary,
-            "check",
-            "--config-file",
-            str(bundled_ty_config()),
-            "--error",
-            "all",  # new rules added after the pin stay errors too
-            "--output-format",
-            "concise",
-            *paths,
-        ],
+        [*cmd, *paths],
         capture_output=True,
         text=True,
         check=False,
@@ -123,10 +156,14 @@ def run_ty(paths: list[str]) -> list[Finding] | None:
         emit_error(f"pyslop: ty check failed:\n{proc.stderr}")
         return None
     findings = []
+    summary: int | None = None
     for line in proc.stdout.splitlines():
         match = TY_CONCISE_RE.match(line)
         if match is None:
-            continue  # summary lines like "Found 2 diagnostics"
+            count = TY_SUMMARY_RE.match(line.strip())
+            if count is not None:
+                summary = int(count.group("count"))
+            continue
         findings.append(
             {
                 "engine": "ty",
@@ -139,6 +176,14 @@ def run_ty(paths: list[str]) -> list[Finding] | None:
                 "severity": match.group("severity"),
             }
         )
+    if proc.returncode == 1 and (summary is None or summary != len(findings)):
+        emit_error(
+            "pyslop: ty signaled diagnostics but the concise output did not "
+            f"parse (summary={summary}, parsed={len(findings)}); "
+            "refusing partial results:\n"
+            f"{proc.stdout.strip()[:1000]}"
+        )
+        return None
     return findings
 
 
@@ -196,6 +241,7 @@ def run_ruff(paths: list[str], *, fix: bool) -> tuple[list[Finding], int]:
 
 
 PYSLOP_BLOCK = """[tool.pyslop]
+# Exclude globs are gitignore-style: `src/**` crosses directories.
 exclude = []
 # Severity overrides by rule id ("warn" / "error" / "off").
 # An entry that turns a rule off needs a reason comment with an issue
@@ -227,17 +273,14 @@ def _append_block(path: Path, block: str) -> None:
     path.write_text((text + "\n\n" if text else "") + block.rstrip("\n") + "\n")
 
 
-def _init_rev(root: Path) -> str:
-    """Pinned version for generated files: own git tag, else main."""
-    proc = subprocess.run(
-        ["git", "describe", "--tags"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    tag = proc.stdout.strip()
-    return tag if proc.returncode == 0 and tag else "main"
+def _init_rev() -> str:
+    """Pinned pyslop release for generated files: installed version, else main.
+
+    Never the consumer's git state: `git describe` in the target repo stamps
+    unrelated consumer tags (e.g. v2.229.0) into the hook/workflow pin.
+    """
+    release = _pyslop_version()
+    return f"v{release}" if release != "unknown" else "main"
 
 
 def _pre_commit_entry(rev: str) -> str:
@@ -307,6 +350,19 @@ def _write_workflow(base: Path, rev: str) -> None:
         emit(f"pyslop: wrote {workflow}")
 
 
+def _ty_rules_block() -> str:
+    """Shipped strict ty rules as [tool.ty.rules]; the floor stays native.
+
+    No `[environment]` is stamped: ty infers the floor from the consumer's
+    `requires-python`, so no PEP440 parsing is needed here.
+    """
+    data = tomllib.loads(bundled_ty_config().read_text())
+    rules = data.get("rules", {})
+    lines = ["[tool.ty.rules]"]
+    lines.extend(f'{key} = "{rules[key]}"' for key in sorted(rules))
+    return "\n".join(lines) + "\n"
+
+
 def init_command(root: str) -> int:
     base = Path(root).resolve()
     vendored = base / "tools" / "pyslop" / "rules"
@@ -328,14 +384,14 @@ def init_command(root: str) -> int:
     for key, block in (
         ("pyslop", PYSLOP_BLOCK),
         ("ruff", _embed_toml(shipped_ruff_config(), "tool.ruff")),
-        ("ty", _embed_toml(bundled_ty_config(), "tool.ty")),
+        ("ty", _ty_rules_block()),
     ):
         if key in tool:
             emit(f"pyslop: [tool.{key}] already present, skipping")
         else:
             _append_block(pyproject, block)
             emit(f"pyslop: added [tool.{key}] to {pyproject}")
-    rev = _init_rev(base)
+    rev = _init_rev()
     _write_hook(base, rev)
     _write_workflow(base, rev)
     return 0
@@ -568,20 +624,38 @@ def pyslop_table(pyproject: Path) -> PyslopConfig:
     return out
 
 
+def _exclude_spec(project: Path, patterns: list[str]) -> pathspec.PathSpec | None:
+    """Gitignore-style matcher for excludes; loud, never a silent fallback."""
+    try:
+        return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+    except ValueError as exc:
+        emit_error(f"pyslop: bad exclude glob in {project}: {exc}")
+        return None
+
+
+def _is_excluded(rel_posix: str, spec: pathspec.PathSpec | None) -> bool:
+    """True when an exclude glob covers a project-relative path.
+
+    Single gitignore matcher, no legacy OR arm: `src/**` crosses directories,
+    `!` reincludes, and a bad glob excludes nothing (loud).
+    """
+    return spec is not None and spec.match_file(rel_posix)
+
+
 def apply_pyslop_config(findings: list[Finding]) -> list[Finding]:
     """Apply [tool.pyslop] rules severities (ast-grep only) and excludes."""
-    cache: dict[Path | None, tuple[dict[str, str], list[str]]] = {}
+    CacheKey = tuple[dict[str, str], list[str], pathspec.PathSpec | None]
+    cache: dict[Path | None, CacheKey] = {}
     kept = []
     for finding in findings:
         path = Path(finding["file"])
         project = nearest_pyproject(path)
         if project not in cache:
             table = pyslop_table(project) if project is not None else {}
-            cache[project] = (
-                table.get("rules", {}),
-                pyslop_excludes(project) if project is not None else [],
-            )
-        rules, exclude = cache[project]
+            exclude = pyslop_excludes(project) if project is not None else []
+            spec = _exclude_spec(project, exclude) if project is not None else None
+            cache[project] = (table.get("rules", {}), exclude, spec)
+        rules, exclude, spec = cache[project]
         if finding["engine"] == "ast-grep" and finding["rule"] in rules:
             level = str(rules[finding["rule"]]).lower()
             if level == "off":
@@ -597,10 +671,7 @@ def apply_pyslop_config(findings: list[Finding]) -> list[Finding]:
             if not rel.is_relative_to(base):
                 kept.append(finding)
                 continue
-            if any(
-                isinstance(pat, str) and PurePath(str(rel.relative_to(base))).match(pat)
-                for pat in exclude
-            ):
+            if _is_excluded(rel.relative_to(base).as_posix(), spec):
                 continue
         kept.append(finding)
     return kept
@@ -633,8 +704,88 @@ def print_text(findings: list[Finding]) -> None:
     )
 
 
+class _GrepOutputError(Exception):
+    """Malformed engine output or unreadable source: fail closed, never partial."""
+
+
+def _preview(item: object) -> str:
+    """Short repr for diagnostics (kept out of `raise` sites for TRY003)."""
+    return f"{item!r}"[:200]
+
+
+def _grep_finding(item: object, sources: dict[str, list[str]]) -> Finding | None:
+    """One finding, or None when SAFETY-justified. Raises _GrepOutputError."""
+    if not isinstance(item, dict):
+        detail = f"finding is not an object: {_preview(item)}"
+        raise _GrepOutputError(detail)
+    try:
+        start = item["range"]["start"]
+        raw_line = start["line"]
+        raw_col = start["column"]
+    except (KeyError, TypeError) as exc:
+        detail = f"finding has no range/start: {_preview(item)}"
+        raise _GrepOutputError(detail) from exc
+    if not isinstance(raw_line, int) or not isinstance(raw_col, int):
+        detail = f"finding range is not integer: {_preview(item)}"
+        raise _GrepOutputError(detail)
+    line, col = raw_line + 1, raw_col + 1
+    rule = item.get("ruleId", "")
+    file = item.get("file", "")
+    if not isinstance(rule, str) or not isinstance(file, str):
+        detail = f"finding id/file is not text: {_preview(item)}"
+        raise _GrepOutputError(detail)
+    if rule == SAFETY_RULE:
+        if file not in sources:
+            try:
+                sources[file] = Path(file).read_text().splitlines()
+            except OSError as exc:
+                detail = f"cannot read source for finding: {file} ({exc})"
+                raise _GrepOutputError(detail) from exc
+        if has_safety(sources[file], line):
+            return None
+    return {
+        "engine": "ast-grep",
+        "rule": rule,
+        "file": file,
+        "line": line,
+        "col": col,
+        "message": item.get("message") or "",
+        "fix_hint": item.get("note") or "",
+        "severity": item.get("severity") or "error",
+    }
+
+
+def _decode_grep_output(proc: subprocess.CompletedProcess[str]) -> Sequence[object]:
+    """Validated JSON list from ast-grep stdout. Raises _GrepOutputError."""
+    text = proc.stdout.strip()
+    if not text:
+        if proc.returncode == 1:
+            detail = "signaled findings but emitted no JSON"
+            raise _GrepOutputError(detail)
+        return []
+    try:
+        raw: object = json.loads(text)
+    except json.JSONDecodeError as exc:
+        detail = f"invalid JSON: {exc}"
+        raise _GrepOutputError(detail) from exc
+    if not isinstance(raw, list):
+        detail = "top level is not a JSON list"
+        raise _GrepOutputError(detail)
+    if proc.returncode == 1 and not raw:
+        # Findings signaled but the payload is empty: fail closed. (This
+        # checks the raw payload so SAFETY-filtered runs still exit 0.)
+        detail = "signaled findings but the payload is empty"
+        raise _GrepOutputError(detail)
+    return raw
+
+
 def run_ast_grep(paths: list[str]) -> tuple[list[Finding], int]:
-    """Run ast-grep scan with SAFETY filtering. Returns (findings, fatal_exit)."""
+    """Run ast-grep scan with SAFETY filtering. Returns (findings, fatal_exit).
+
+    Fail closed: ast-grep exits 0 (clean) or 1 (findings). Any other exit,
+    a findings signal with no JSON payload, or malformed items are a runner
+    failure (exit 2), never a silent green.
+    """
     binary = require_binary("ast-grep")
     if binary is None:
         return [], 2
@@ -652,35 +803,27 @@ def run_ast_grep(paths: list[str]) -> tuple[list[Finding], int]:
         text=True,
         check=False,
     )
+    if proc.returncode not in (0, 1):
+        emit_error(
+            "pyslop: ast-grep scan failed "
+            f"(exit {proc.returncode}):\n{proc.stderr.strip()}"
+        )
+        return [], 2
     try:
-        raw = json.loads(proc.stdout if proc.stdout.strip() else "[]")
-    except json.JSONDecodeError:
-        emit_error(f"pyslop: could not parse ast-grep output:\n{proc.stderr}")
+        raw = _decode_grep_output(proc)
+    except _GrepOutputError as exc:
+        emit_error(f"pyslop: ast-grep: {exc}; refusing partial results.")
         return [], 2
     sources: dict[str, list[str]] = {}
     findings: list[Finding] = []
-    for item in raw:
-        rule = item.get("ruleId", "")
-        line = item["range"]["start"]["line"] + 1
-        col = item["range"]["start"]["column"] + 1
-        file = item.get("file", "")
-        if rule == SAFETY_RULE:
-            if file not in sources:
-                sources[file] = Path(file).read_text().splitlines()
-            if has_safety(sources[file], line):
-                continue
-        findings.append(
-            {
-                "engine": "ast-grep",
-                "rule": rule,
-                "file": file,
-                "line": line,
-                "col": col,
-                "message": item.get("message") or "",
-                "fix_hint": item.get("note") or "",
-                "severity": item.get("severity") or "error",
-            }
-        )
+    try:
+        for item in raw:
+            finding = _grep_finding(item, sources)
+            if finding is not None:
+                findings.append(finding)
+    except _GrepOutputError as exc:
+        emit_error(f"pyslop: ast-grep: {exc}; refusing partial results.")
+        return [], 2
     return findings, 0
 
 

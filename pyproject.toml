@@ -1,6 +1,6 @@
 [project]
 name = "pyslop"
-version = "0.1.0"
+version = "0.1.1"
 description = "Add your description here"
 readme = "README.md"
 authors = [
@@ -9,9 +9,12 @@ authors = [
 requires-python = ">=3.12"
 scripts = { pyslop = "pyslop.cli:main" }
 dependencies = [
-    "ast-grep-cli>=0.45.3",
-    "ruff>=0.16.6",
-    "ty>=0.0.80",
+    # Exact pins: `uv tool run --from git@tag` resolves from this metadata
+    # and ignores uv.lock, so only == pins make installs reproducible.
+    "ast-grep-cli==0.45.3",
+    "pathspec==0.12.1",
+    "ruff==0.16.6",
+    "ty==0.0.80",
 ]
 
 [build-system]

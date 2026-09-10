@@ -53,4 +53,6 @@ as does a private name starting with `_`. `async def` follows the same rules.
 ## Notes
 
 - Both `def` and `async def` are matched; the `def $F` pattern covers both.
+- Return annotations do not exempt a signature: typed `**kwargs` with
+  `-> ...` is matched, and `Unpack[...]` exemptions cover it too.
 - Any annotation other than `Unpack[...]` (including `Any` or `int`) still fails.

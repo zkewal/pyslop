@@ -1,6 +1,26 @@
 id: pyslop/no-kwargs-passthrough
 snapshots:
   ? |
+    async def bar(x, **kwargs: int) -> str:
+        pass
+  : labels:
+    - source: |-
+        async def bar(x, **kwargs: int) -> str:
+            pass
+      style: primary
+      start: 0
+      end: 48
+  ? |
+    async def foo(**kwargs) -> int:
+        pass
+  : labels:
+    - source: |-
+        async def foo(**kwargs) -> int:
+            pass
+      style: primary
+      start: 0
+      end: 40
+  ? |
     async def foo(**kwargs):
         pass
   : labels:
@@ -11,6 +31,16 @@ snapshots:
       start: 0
       end: 33
   ? |
+    def bar(x: int, **kwargs: int) -> None:
+        pass
+  : labels:
+    - source: |-
+        def bar(x: int, **kwargs: int) -> None:
+            pass
+      style: primary
+      start: 0
+      end: 48
+  ? |
     def bar(x: int, **kwargs: int):
         pass
   : labels:
@@ -20,6 +50,16 @@ snapshots:
       style: primary
       start: 0
       end: 40
+  ? |
+    def foo(**kwargs) -> None:
+        pass
+  : labels:
+    - source: |-
+        def foo(**kwargs) -> None:
+            pass
+      style: primary
+      start: 0
+      end: 35
   ? |
     def foo(**kwargs):
         pass
@@ -40,3 +80,13 @@ snapshots:
       style: primary
       start: 0
       end: 44
+  ? |
+    def update_tour(tour_id: int, **kwargs: Any) -> None:
+        pass
+  : labels:
+    - source: |-
+        def update_tour(tour_id: int, **kwargs: Any) -> None:
+            pass
+      style: primary
+      start: 0
+      end: 62
