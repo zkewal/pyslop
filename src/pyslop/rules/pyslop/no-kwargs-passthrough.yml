@@ -1,0 +1,17 @@
+id: pyslop/no-kwargs-passthrough
+language: python
+severity: error
+rule:
+  any:
+    - pattern: "def $F($$$, **$KW): $$$BODY"
+    - all:
+        - pattern: "def $F($$$, **$KW: $TYPE): $$$BODY"
+        - not:
+            any:
+              - pattern: "def $F($$$, **$KW: Unpack[$$$]): $$$BODY"
+              - pattern: "def $F($$$, **$KW: typing.Unpack[$$$]): $$$BODY"
+constraints:
+  F:
+    regex: "^[^_]"
+message: Public function takes **kwargs without a typed contract.
+note: "Annotate as **kwargs: Unpack[SomeTypedDict] or make the function private (_name). Parse at the boundary instead of passing **kwargs through."
