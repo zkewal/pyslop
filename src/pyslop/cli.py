@@ -451,10 +451,6 @@ def check_pyproject_deviations(pyproject: Path) -> list[dict]:
                         '(only "rules" and "exclude" are supported).',
                     )
                 )
-            elif key.startswith("rules."):
-                findings.extend(
-                    _scan_off_pairs(pyproject, lines, lineno, raw, "pyslop")
-                )
         elif section == "pyslop-rules":
             if OFF_VALUE_RE.match(value) and not has_reason_comment(lines, lineno):
                 findings.append(
@@ -476,14 +472,11 @@ def check_pyproject_deviations(pyproject: Path) -> list[dict]:
                         "needs a reason and an issue link.",
                     )
                 )
-        elif section == "ty-overrides":
-            if key == "rules":
-                findings.extend(_scan_off_pairs(pyproject, lines, lineno, raw, "ty"))
-                depth = value.count("{") - value.count("}")
-                if depth > 0:
-                    pending = "ty"
-            elif key.startswith("rules."):
-                findings.extend(_scan_off_pairs(pyproject, lines, lineno, raw, "ty"))
+        elif section == "ty-overrides" and key == "rules":
+            findings.extend(_scan_off_pairs(pyproject, lines, lineno, raw, "ty"))
+            depth = value.count("{") - value.count("}")
+            if depth > 0:
+                pending = "ty"
     return findings
 
 
