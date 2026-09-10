@@ -1,0 +1,3 @@
+x = MONOREPO_SLOP
+y = 1
+z = MONOREPO_SLOP
