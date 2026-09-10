@@ -17,7 +17,7 @@ evidence rules. Read `CONTEXT.md` for vocabulary and `docs/decisions.md` before 
 ## Agent skills
 
 ### Issue tracker
-GitHub issues on `zkewal/pyslop` via `gh`. See `docs/agents/issue-tracker.md`.
+Local markdown under `.scratch/<feature>/issues/` (gitignored). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 Default five labels. See `docs/agents/triage-labels.md`.
