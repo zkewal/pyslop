@@ -7,7 +7,11 @@ authors = [
     { name = "Kewal", email = "z.kewal@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "ast-grep-cli>=0.45.3",
+    "ruff>=0.16.6",
+    "ty>=0.0.80",
+]
 
 [build-system]
 requires = ["uv_build>=0.11.31,<0.12.0"]
