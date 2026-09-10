@@ -12,10 +12,18 @@ from pathlib import Path
 
 SAFETY_RULE = "pyslop/require-safety-comment"
 SAFETY_RE = re.compile(r"#\s*SAFETY\s*:\s*\S")
+TY_CONCISE_RE = re.compile(
+    r"^(?P<file>.+):(?P<line>\d+):(?P<col>\d+): "
+    r"(?P<severity>\w+)\[(?P<rule>[^\]]+)\] (?P<message>.*)$"
+)
 
 
 def bundled_rules_dir() -> Path:
     return Path(__file__).resolve().parent / "rules"
+
+
+def bundled_ty_config() -> Path:
+    return Path(__file__).resolve().parent / "config" / "ty.toml"
 
 
 def discover_rules_dir(paths: list[str]) -> Path:
@@ -36,7 +44,52 @@ def has_safety(lines: list[str], lineno: int) -> bool:
     return bool(SAFETY_RE.search(same) or SAFETY_RE.search(prev))
 
 
-def check_command(paths: list[str], format: str) -> int:
+def run_ty(paths: list[str]) -> list[dict] | None:
+    """Run ty with the shipped strict config; None means the runner itself failed."""
+    binary = shutil.which("ty")
+    if binary is None:
+        print("pyslop: ty binary not found on PATH", file=sys.stderr)
+        return None
+    proc = subprocess.run(
+        [
+            binary,
+            "check",
+            "--config-file",
+            str(bundled_ty_config()),
+            "--error",
+            "all",  # new rules added after the pin stay errors too
+            "--output-format",
+            "concise",
+            *paths,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode not in (0, 1):
+        print(f"pyslop: ty check failed:\n{proc.stderr}", file=sys.stderr)
+        return None
+    findings = []
+    for line in proc.stdout.splitlines():
+        match = TY_CONCISE_RE.match(line)
+        if match is None:
+            continue  # summary lines like "Found 2 diagnostics"
+        findings.append(
+            {
+                "engine": "ty",
+                "rule": f"ty/{match.group('rule')}",
+                "file": match.group("file"),
+                "line": int(match.group("line")),
+                "col": int(match.group("col")),
+                "message": match.group("message"),
+                "fix_hint": "",
+                "severity": match.group("severity"),
+            }
+        )
+    return findings
+
+
+def check_command(paths: list[str], format: str, no_ty: bool = False) -> int:
     binary = shutil.which("ast-grep")
     if binary is None:
         print("pyslop: ast-grep binary not found on PATH", file=sys.stderr)
@@ -79,6 +132,11 @@ def check_command(paths: list[str], format: str) -> int:
                 "severity": item.get("severity") or "error",
             }
         )
+    if not no_ty:
+        ty_findings = run_ty(paths)
+        if ty_findings is None:
+            return 2
+        findings.extend(ty_findings)
     if format == "json":
         print(json.dumps(findings, indent=2))
     else:
@@ -101,11 +159,14 @@ def build_parser() -> argparse.ArgumentParser:
         "paths", nargs="*", default=["."], help="Files or dirs (default: .)."
     )
     check.add_argument("--format", choices=["text", "json"], default="text")
+    check.add_argument(
+        "--no-ty", action="store_true", help="Skip ty (pre-commit speed)."
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "check":
-        return check_command(args.paths, args.format)
+        return check_command(args.paths, args.format, args.no_ty)
     raise AssertionError(f"unknown command {args.command}")
