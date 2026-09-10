@@ -1,0 +1,8 @@
+[project]
+name = "ty-override-good"
+version = "0.1.0"
+
+[[tool.ty.overrides]]
+include = ["gen/**"]
+# generated stubs lack sources: https://linear.app/x/DEX-4
+rules = { "unresolved-import" = "ignore" }

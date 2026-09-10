@@ -1,0 +1,7 @@
+[project]
+name = "rules-warn"
+version = "0.1.0"
+
+[tool.pyslop.rules]
+# legacy bridge for old tests: https://linear.app/x/DEX-9
+"pyslop/no-module-mocking" = "warn"
