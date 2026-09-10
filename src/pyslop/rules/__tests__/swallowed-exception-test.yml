@@ -1,0 +1,55 @@
+id: pyslop/swallowed-exception
+valid:
+  - |
+    try:
+        x()
+    except ValueError:
+        raise
+  - |
+    try:
+        x()
+    except ValueError as e:
+        raise ValueError("bad") from e
+  - |
+    def f():
+        try:
+            x()
+        except ValueError:
+            return None
+  - |
+    try:
+        x()
+    except ValueError:
+        if cond:
+            raise
+invalid:
+  - |
+    try:
+        x()
+    except Exception as e:
+        print(e)
+  - |
+    try:
+        x()
+    except ValueError:
+        pass
+  - |
+    for _ in range(3):
+        try:
+            x()
+        except ValueError:
+            continue
+  - |
+    import logging
+    try:
+        x()
+    except ValueError as e:
+        logging.exception("failed")
+  - |
+    try:
+        x()
+    except ValueError:
+        try:
+            fallback()
+        except OSError:
+            pass

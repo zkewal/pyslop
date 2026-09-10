@@ -1,0 +1,15 @@
+id: pyslop/no-blanket-ignore
+valid:
+  - |
+    x = 1  # type: ignore[assignment]
+  - |
+    x = 1  # ty: ignore[invalid-assignment]
+  - |
+    x = 1  # noqa: F401
+invalid:
+  - |
+    x = 1  # type: ignore
+  - |
+    x = 1  # ty: ignore
+  - |
+    x = 1  # type: ignore  # SAFETY: still bare, still wrong

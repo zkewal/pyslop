@@ -1,0 +1,17 @@
+id: pyslop/swallowed-exception
+language: python
+severity: error
+rule:
+  kind: except_clause
+  not:
+    has:
+      any:
+        - kind: raise_statement
+        - kind: return_statement
+      stopBy:
+        any:
+          - kind: function_definition
+          - kind: class_definition
+          - kind: lambda
+message: Except handler swallows the exception without re-raising or returning.
+note: "Re-raise with `raise` (or `raise ... from e`), return early, or delete the handler. Logging alone does not count."
