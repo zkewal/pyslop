@@ -9,5 +9,11 @@ rule:
     - pattern: '$M.patch("$P", $$$)'
     - pattern: 'monkeypatch.setattr("$T")'
     - pattern: 'monkeypatch.setattr("$T", $$$)'
+constraints:
+  P:
+    # Exclude slash-prefixed route literals (e.g. TestClient.patch("/..."));
+    # retains Unicode dotted paths (empty input no longer matched, but that is
+    # not a valid Python target anyway).
+    regex: '^[^/]'
 message: Test mocks a module by dotted string path.
 note: "Use a real seam (dependency injection, protocol, or fixture) instead of patch('dotted.path'). patch.object and monkeypatch.setattr(obj, 'attr', v) are allowed."
