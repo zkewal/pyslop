@@ -1,0 +1,63 @@
+id: pyslop/no-dict-any
+snapshots:
+  ? |
+    from typing import Any
+    def foo() -> dict[str, Any]:
+        return {}
+  : labels:
+    - source: dict[str, Any]
+      style: primary
+      start: 36
+      end: 50
+    - source: |-
+        def foo() -> dict[str, Any]:
+            return {}
+      style: secondary
+      start: 23
+      end: 65
+  ? |
+    from typing import Any
+    def foo(x: dict[str, Any]):
+        pass
+  : labels:
+    - source: dict[str, Any]
+      style: primary
+      start: 34
+      end: 48
+    - source: |-
+        def foo(x: dict[str, Any]):
+            pass
+      style: secondary
+      start: 23
+      end: 59
+  ? |
+    from typing import Any
+    import typing
+    def foo(x: typing.Dict[str, Any]):
+        pass
+  : labels:
+    - source: typing.Dict[str, Any]
+      style: primary
+      start: 48
+      end: 69
+    - source: |-
+        def foo(x: typing.Dict[str, Any]):
+            pass
+      style: secondary
+      start: 37
+      end: 80
+  ? |
+    from typing import Any, Mapping
+    def foo(x: Mapping[str, Any]):
+        pass
+  : labels:
+    - source: Mapping[str, Any]
+      style: primary
+      start: 43
+      end: 60
+    - source: |-
+        def foo(x: Mapping[str, Any]):
+            pass
+      style: secondary
+      start: 32
+      end: 71
