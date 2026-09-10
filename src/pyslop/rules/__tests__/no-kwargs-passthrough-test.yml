@@ -26,6 +26,26 @@ valid:
   - |
     def _private(**kwargs: int) -> None:
         pass
+  - |
+    from typing import ParamSpec
+    P = ParamSpec("P")
+    def foo(*args: P.args, **kwargs: P.kwargs):
+        pass
+  - |
+    from typing import ParamSpec
+    Ps = ParamSpec("Ps")
+    def foo(*args: Ps.args, **kwargs: Ps.kwargs) -> None:
+        pass
+  - |
+    from typing import ParamSpec
+    _P = ParamSpec("_P")
+    async def foo(*args: _P.args, **kwargs: _P.kwargs) -> int:
+        pass
+  - |
+    from typing import ParamSpec
+    Q = ParamSpec("Q")
+    async def foo(*args: Q.args, **kwargs: Q.kwargs):
+        pass
 invalid:
   - |
     def foo(**kwargs):

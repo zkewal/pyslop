@@ -54,5 +54,11 @@ as does a private name starting with `_`. `async def` follows the same rules.
 
 - Both `def` and `async def` are matched; the `def $F` pattern covers both.
 - Return annotations do not exempt a signature: typed `**kwargs` with
-  `-> ...` is matched, and `Unpack[...]` exemptions cover it too.
-- Any annotation other than `Unpack[...]` (including `Any` or `int`) still fails.
+  `-> ...` is matched, and `Unpack[...]` / `P.kwargs` exemptions cover it too.
+- `**kwargs: P.kwargs` (any ParamSpec name) is exempt: a ParamSpec-annotated
+  forwarder preserves the wrapped signature, which is a checkable contract.
+  The match is syntactic, not binding-aware: a non-ParamSpec `<Name>.kwargs`
+  is trusted the same way a shadowed `Unpack` would be. Confirm the
+  `ParamSpec` import on suspicion; fabrications that name no such attribute
+  still fail downstream type checks.
+- Any other annotation (including `Any` or `int`) still fails.
