@@ -5,3 +5,4 @@ dist/
 .ruff_cache/
 .pytest_cache/
 .scratch/
+.worktrees/
