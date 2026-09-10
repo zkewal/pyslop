@@ -7,7 +7,16 @@ FIXTURES = Path(__file__).parent / "fixtures" / "probing"
 
 
 def test_three_isinstance_branches_reported_once(capsys):
-    code = main(["check", str(FIXTURES / "ladder_bad.py"), "--format", "json"])
+    code = main(
+        [
+            "check",
+            str(FIXTURES / "ladder_bad.py"),
+            "--format",
+            "json",
+            "--only",
+            "ast-grep",
+        ]
+    )
     findings = json.loads(capsys.readouterr().out)
     assert code == 1
     assert len(findings) == 1
@@ -22,14 +31,32 @@ def test_three_isinstance_branches_reported_once(capsys):
 
 
 def test_two_branches_and_mixed_subjects_pass(capsys):
-    code = main(["check", str(FIXTURES / "ladder_good.py"), "--format", "json"])
+    code = main(
+        [
+            "check",
+            str(FIXTURES / "ladder_good.py"),
+            "--format",
+            "json",
+            "--only",
+            "ast-grep",
+        ]
+    )
     findings = json.loads(capsys.readouterr().out)
     assert code == 0
     assert findings == []
 
 
 def test_literal_attr_names_reported_per_line(capsys):
-    code = main(["check", str(FIXTURES / "attr_bad.py"), "--format", "json"])
+    code = main(
+        [
+            "check",
+            str(FIXTURES / "attr_bad.py"),
+            "--format",
+            "json",
+            "--only",
+            "ast-grep",
+        ]
+    )
     findings = json.loads(capsys.readouterr().out)
     assert code == 1
     assert sorted(f["line"] for f in findings) == [3, 4, 5, 6]
@@ -43,7 +70,16 @@ def test_literal_attr_names_reported_per_line(capsys):
 
 
 def test_variable_attr_names_pass(capsys):
-    code = main(["check", str(FIXTURES / "attr_good.py"), "--format", "json"])
+    code = main(
+        [
+            "check",
+            str(FIXTURES / "attr_good.py"),
+            "--format",
+            "json",
+            "--only",
+            "ast-grep",
+        ]
+    )
     findings = json.loads(capsys.readouterr().out)
     assert code == 0
     assert findings == []

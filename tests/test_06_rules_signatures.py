@@ -7,7 +7,9 @@ FIXTURES = Path(__file__).parent / "fixtures" / "signatures"
 
 
 def _findings_for(capsys, filename, rule):
-    code = main(["check", str(FIXTURES / filename), "--format", "json"])
+    code = main(
+        ["check", str(FIXTURES / filename), "--format", "json", "--only", "ast-grep"]
+    )
     findings = json.loads(capsys.readouterr().out)
     return code, [f for f in findings if f["rule"] == rule]
 
