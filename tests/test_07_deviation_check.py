@@ -1,5 +1,8 @@
 import json
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 from pyslop.cli import main
 
@@ -7,12 +10,16 @@ FIXTURES = Path(__file__).parent / "fixtures" / "deviations"
 RULE = "pyslop/deviation-needs-reason"
 
 
-def _check(capsys, target, *extra):
+def _check(
+    capsys: pytest.CaptureFixture[str], target: Path, *extra: str
+) -> tuple[int, Any]:  # SAFETY: decoded JSON scaffolding
     code = main(["check", str(target), "--format", "json", *extra])
     return code, json.loads(capsys.readouterr().out)
 
 
-def test_uncommented_per_file_ignore_points_at_toml_line(capsys):
+def test_uncommented_per_file_ignore_points_at_toml_line(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code, findings = _check(
         capsys, FIXTURES / "per_file_ignore_bad", "--only", "pyslop"
     )
@@ -29,7 +36,7 @@ def test_uncommented_per_file_ignore_points_at_toml_line(capsys):
     assert finding["fix_hint"]
 
 
-def test_reasoned_per_file_ignore_passes(capsys):
+def test_reasoned_per_file_ignore_passes(capsys: pytest.CaptureFixture[str]) -> None:
     code, findings = _check(
         capsys, FIXTURES / "per_file_ignore_good", "--only", "pyslop"
     )
@@ -37,7 +44,9 @@ def test_reasoned_per_file_ignore_passes(capsys):
     assert findings == []
 
 
-def test_inline_off_with_reason_suppresses_rule(capsys):
+def test_inline_off_with_reason_suppresses_rule(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code, findings = _check(
         capsys, FIXTURES / "rules_off" / "off_sample.py", "--only", "ast-grep"
     )
@@ -48,7 +57,9 @@ def test_inline_off_with_reason_suppresses_rule(capsys):
     assert findings == []
 
 
-def test_warn_downgrades_severity_without_failing(capsys):
+def test_warn_downgrades_severity_without_failing(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code, findings = _check(
         capsys, FIXTURES / "rules_warn" / "warn_sample.py", "--only", "ast-grep"
     )
@@ -59,7 +70,9 @@ def test_warn_downgrades_severity_without_failing(capsys):
     assert findings[0]["fix_hint"]
 
 
-def test_unknown_pyslop_key_is_error_finding(capsys):
+def test_unknown_pyslop_key_is_error_finding(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code, findings = _check(capsys, FIXTURES / "unknown_key", "--only", "pyslop")
     assert code == 1
     assert len(findings) == 1
@@ -69,7 +82,9 @@ def test_unknown_pyslop_key_is_error_finding(capsys):
     assert "stranger" in findings[0]["message"]
 
 
-def test_ty_override_downgrade_without_reason_is_flagged(capsys):
+def test_ty_override_downgrade_without_reason_is_flagged(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code, findings = _check(capsys, FIXTURES / "ty_override_bad", "--only", "pyslop")
     assert code == 1
     assert len(findings) == 1
@@ -78,13 +93,15 @@ def test_ty_override_downgrade_without_reason_is_flagged(capsys):
     assert "unresolved-import" in findings[0]["message"]
 
 
-def test_reasoned_ty_override_passes(capsys):
+def test_reasoned_ty_override_passes(capsys: pytest.CaptureFixture[str]) -> None:
     code, findings = _check(capsys, FIXTURES / "ty_override_good", "--only", "pyslop")
     assert code == 0
     assert findings == []
 
 
-def test_excluded_path_is_silent_and_kept_path_reports(capsys):
+def test_excluded_path_is_silent_and_kept_path_reports(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code, findings = _check(
         capsys, FIXTURES / "exclude" / "gen" / "dirty.py", "--only", "ast-grep"
     )

@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from pyslop.cli import main
 
 EXCEPTIONS = Path(__file__).parent / "fixtures" / "exceptions"
@@ -10,7 +12,9 @@ SWALLOWED = "pyslop/swallowed-exception"
 NO_BLANKET = "pyslop/no-blanket-ignore"
 
 
-def test_handlers_that_neither_raise_nor_return_are_reported(capsys):
+def test_handlers_that_neither_raise_nor_return_are_reported(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code = main(
         ["check", str(EXCEPTIONS / "bad.py"), "--format", "json", "--only", "ast-grep"]
     )
@@ -26,7 +30,9 @@ def test_handlers_that_neither_raise_nor_return_are_reported(capsys):
         assert finding["fix_hint"]
 
 
-def test_handlers_that_reraise_or_return_exit_zero(capsys):
+def test_handlers_that_reraise_or_return_exit_zero(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code = main(
         [
             "check",
@@ -41,7 +47,9 @@ def test_handlers_that_reraise_or_return_exit_zero(capsys):
     assert json.loads(capsys.readouterr().out) == []
 
 
-def test_bare_ignores_are_reported_even_with_safety(capsys):
+def test_bare_ignores_are_reported_even_with_safety(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code = main(
         ["check", str(BLANKET / "bad.py"), "--format", "json", "--only", "ast-grep"]
     )
@@ -57,7 +65,9 @@ def test_bare_ignores_are_reported_even_with_safety(capsys):
         assert finding["fix_hint"]
 
 
-def test_coded_ignores_with_reasons_exit_zero(capsys):
+def test_coded_ignores_with_reasons_exit_zero(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code = main(
         ["check", str(BLANKET / "good.py"), "--format", "json", "--only", "ast-grep"]
     )

@@ -2,24 +2,28 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
+
 from pyslop.cli import main
 
 FIXTURES = Path(__file__).parent / "fixtures" / "init"
 
 
-def fresh_repo(tmp_path):
+def fresh_repo(tmp_path: Path) -> Path:
     dest = tmp_path / "fresh"
     shutil.copytree(FIXTURES / "fresh", dest)
     return dest
 
 
-def custom_repo(tmp_path):
+def custom_repo(tmp_path: Path) -> Path:
     dest = tmp_path / "custom"
     shutil.copytree(FIXTURES / "custom", dest)
     return dest
 
 
-def test_init_vendors_rules_and_writes_all_blocks(tmp_path, capsys):
+def test_init_vendors_rules_and_writes_all_blocks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     root = fresh_repo(tmp_path)
     code = main(["init", str(root)])
     capsys.readouterr()
@@ -36,7 +40,9 @@ def test_init_vendors_rules_and_writes_all_blocks(tmp_path, capsys):
     assert "pyslop@main" in workflow.read_text()
 
 
-def test_init_never_overwrites_existing_keys(tmp_path, capsys):
+def test_init_never_overwrites_existing_keys(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     root = custom_repo(tmp_path)
     hook_before = (root / ".pre-commit-config.yaml").read_text()
     workflow_before = (root / ".github" / "workflows" / "pyslop.yml").read_text()
@@ -55,7 +61,9 @@ def test_init_never_overwrites_existing_keys(tmp_path, capsys):
     assert "already present" in out
 
 
-def test_init_starts_deviation_clean(tmp_path, capsys):
+def test_init_starts_deviation_clean(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     root = fresh_repo(tmp_path)
     assert main(["init", str(root)]) == 0
     capsys.readouterr()
@@ -67,7 +75,9 @@ def test_init_starts_deviation_clean(tmp_path, capsys):
     assert findings == []
 
 
-def test_init_creates_pyproject_when_missing(tmp_path, capsys):
+def test_init_creates_pyproject_when_missing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     root = tmp_path / "empty"
     root.mkdir()
     code = main(["init", str(root)])

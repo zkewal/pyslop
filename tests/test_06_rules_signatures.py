@@ -1,12 +1,17 @@
 import json
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 from pyslop.cli import main
 
 FIXTURES = Path(__file__).parent / "fixtures" / "signatures"
 
 
-def _findings_for(capsys, filename, rule):
+def _findings_for(
+    capsys: pytest.CaptureFixture[str], filename: str, rule: str
+) -> tuple[int, list[Any]]:  # SAFETY: decoded JSON scaffolding
     code = main(
         ["check", str(FIXTURES / filename), "--format", "json", "--only", "ast-grep"]
     )
@@ -14,7 +19,9 @@ def _findings_for(capsys, filename, rule):
     return code, [f for f in findings if f["rule"] == rule]
 
 
-def test_kwargs_bad_flags_public_untyped_kwargs(capsys):
+def test_kwargs_bad_flags_public_untyped_kwargs(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code, kwargs = _findings_for(
         capsys, "kwargs_bad.py", "pyslop/no-kwargs-passthrough"
     )
@@ -27,7 +34,9 @@ def test_kwargs_bad_flags_public_untyped_kwargs(capsys):
         assert finding["fix_hint"]
 
 
-def test_kwargs_good_allows_unpack_and_private(capsys):
+def test_kwargs_good_allows_unpack_and_private(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code, kwargs = _findings_for(
         capsys, "kwargs_good.py", "pyslop/no-kwargs-passthrough"
     )
@@ -35,7 +44,7 @@ def test_kwargs_good_allows_unpack_and_private(capsys):
     assert code == 0
 
 
-def test_dict_any_bad_flags_signature_any(capsys):
+def test_dict_any_bad_flags_signature_any(capsys: pytest.CaptureFixture[str]) -> None:
     code, dict_any = _findings_for(capsys, "dict_any_bad.py", "pyslop/no-dict-any")
     assert code == 1
     assert sorted(f["line"] for f in dict_any) == [5, 9, 13]
@@ -46,13 +55,17 @@ def test_dict_any_bad_flags_signature_any(capsys):
         assert finding["fix_hint"]
 
 
-def test_dict_any_good_allows_locals_and_typed_values(capsys):
+def test_dict_any_good_allows_locals_and_typed_values(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code, dict_any = _findings_for(capsys, "dict_any_good.py", "pyslop/no-dict-any")
     assert dict_any == []
     assert code == 0
 
 
-def test_mocking_bad_flags_dotted_string_targets(capsys):
+def test_mocking_bad_flags_dotted_string_targets(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code, mocking = _findings_for(capsys, "mocking_bad.py", "pyslop/no-module-mocking")
     assert code == 1
     assert sorted(f["line"] for f in mocking) == [6, 7, 8, 12]
@@ -63,7 +76,7 @@ def test_mocking_bad_flags_dotted_string_targets(capsys):
         assert finding["fix_hint"]
 
 
-def test_mocking_good_allows_object_forms(capsys):
+def test_mocking_good_allows_object_forms(capsys: pytest.CaptureFixture[str]) -> None:
     code, mocking = _findings_for(capsys, "mocking_good.py", "pyslop/no-module-mocking")
     assert mocking == []
     assert code == 0

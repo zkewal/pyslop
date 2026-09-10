@@ -1,12 +1,16 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from pyslop.cli import main
 
 FIXTURES = Path(__file__).parent / "fixtures" / "probing"
 
 
-def test_three_isinstance_branches_reported_once(capsys):
+def test_three_isinstance_branches_reported_once(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code = main(
         [
             "check",
@@ -30,7 +34,9 @@ def test_three_isinstance_branches_reported_once(capsys):
     assert finding["fix_hint"]
 
 
-def test_two_branches_and_mixed_subjects_pass(capsys):
+def test_two_branches_and_mixed_subjects_pass(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code = main(
         [
             "check",
@@ -46,7 +52,9 @@ def test_two_branches_and_mixed_subjects_pass(capsys):
     assert findings == []
 
 
-def test_literal_attr_names_reported_per_line(capsys):
+def test_literal_attr_names_reported_per_line(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code = main(
         [
             "check",
@@ -69,7 +77,7 @@ def test_literal_attr_names_reported_per_line(capsys):
         assert finding["fix_hint"]
 
 
-def test_variable_attr_names_pass(capsys):
+def test_variable_attr_names_pass(capsys: pytest.CaptureFixture[str]) -> None:
     code = main(
         [
             "check",

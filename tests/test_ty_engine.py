@@ -1,12 +1,14 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from pyslop.cli import main
 
 FIXTURES = Path(__file__).parent / "fixtures" / "ty"
 
 
-def test_len_of_int_yields_ty_error(capsys):
+def test_len_of_int_yields_ty_error(capsys: pytest.CaptureFixture[str]) -> None:
     code = main(["check", str(FIXTURES / "bad.py"), "--format", "json", "--only", "ty"])
     findings = json.loads(capsys.readouterr().out)
     assert code == 1
@@ -21,7 +23,9 @@ def test_len_of_int_yields_ty_error(capsys):
     )
 
 
-def test_clean_file_exits_zero_with_empty_list(capsys):
+def test_clean_file_exits_zero_with_empty_list(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code = main(
         ["check", str(FIXTURES / "good.py"), "--format", "json", "--only", "ty"]
     )
@@ -29,7 +33,7 @@ def test_clean_file_exits_zero_with_empty_list(capsys):
     assert json.loads(capsys.readouterr().out) == []
 
 
-def test_no_ty_flag_skips_type_check(capsys):
+def test_no_ty_flag_skips_type_check(capsys: pytest.CaptureFixture[str]) -> None:
     code = main(
         [
             "check",
@@ -45,7 +49,9 @@ def test_no_ty_flag_skips_type_check(capsys):
     assert json.loads(capsys.readouterr().out) == []
 
 
-def test_mypy_config_left_alone(tmp_path, capsys):
+def test_mypy_config_left_alone(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     pyproject = tmp_path / "pyproject.toml"
     content = (
         '[project]\nname = "fake"\nversion = "0.1.0"\n'

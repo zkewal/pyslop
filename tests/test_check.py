@@ -1,12 +1,16 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from pyslop.cli import main
 
 FIXTURES = Path(__file__).parent / "fixtures" / "safety"
 
 
-def test_bad_file_lists_one_finding_per_unjustified_hatch(capsys):
+def test_bad_file_lists_one_finding_per_unjustified_hatch(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code = main(
         ["check", str(FIXTURES / "bad.py"), "--format", "json", "--only", "ast-grep"]
     )
@@ -26,7 +30,9 @@ def test_bad_file_lists_one_finding_per_unjustified_hatch(capsys):
         assert finding["fix_hint"]
 
 
-def test_good_file_exits_zero_with_empty_list(capsys):
+def test_good_file_exits_zero_with_empty_list(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code = main(
         [
             "check",

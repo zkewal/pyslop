@@ -1,13 +1,17 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from pyslop.cli import main
 
 MONO = Path(__file__).parent / "fixtures" / "monorepo"
 MSG = "ast-grep/pyslop/fixture-marker Fixture marker for monorepo discovery test."
 
 
-def test_excluded_file_in_pkg_b_skipped_but_pkg_a_reported(capsys):
+def test_excluded_file_in_pkg_b_skipped_but_pkg_a_reported(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code = main(
         [
             "check",
@@ -40,7 +44,9 @@ def test_excluded_file_in_pkg_b_skipped_but_pkg_a_reported(capsys):
     assert sorted(f["line"] for f in findings) == [1, 3]
 
 
-def test_fully_excluded_path_exits_zero_with_empty_list(capsys):
+def test_fully_excluded_path_exits_zero_with_empty_list(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code = main(
         [
             "check",
@@ -55,7 +61,9 @@ def test_fully_excluded_path_exits_zero_with_empty_list(capsys):
     assert code == 0
 
 
-def test_text_output_grouped_by_file_with_summary_count(capsys):
+def test_text_output_grouped_by_file_with_summary_count(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code = main(
         [
             "check",

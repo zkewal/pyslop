@@ -2,12 +2,16 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
+
 from pyslop.cli import main
 
 FIXTURES = Path(__file__).parent / "fixtures" / "ruff"
 
 
-def test_any_arg_yields_ruff_ann401_alongside_safety_finding(capsys):
+def test_any_arg_yields_ruff_ann401_alongside_safety_finding(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     code = main(
         ["check", str(FIXTURES / "ann.py"), "--format", "json", "--only", "ruff"]
     )
@@ -36,7 +40,9 @@ def test_any_arg_yields_ruff_ann401_alongside_safety_finding(capsys):
     )
 
 
-def test_fix_sorts_imports_and_leaves_cast_untouched(capsys, tmp_path):
+def test_fix_sorts_imports_and_leaves_cast_untouched(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
     target = tmp_path / "fix.py"
     shutil.copy(FIXTURES / "fix.py", target)
     code = main(["check", str(target), "--fix", "--format", "json", "--only", "ruff"])
