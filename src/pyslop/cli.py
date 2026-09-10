@@ -169,6 +169,134 @@ def run_ruff(paths: list[str], fix: bool) -> tuple[list[dict], int]:
     ], 0
 
 
+PYSLOP_BLOCK = """[tool.pyslop]
+exclude = []
+# Severity overrides by rule id ("warn" / "error" / "off").
+# An entry that turns a rule off needs a reason comment with an issue
+# URL on the line directly above it, or `pyslop check` reports
+# pyslop/deviation-needs-reason.
+[tool.pyslop.rules]
+# Example (keep the reason line above the entry):
+# # Slow rollout, see https://github.com/org/repo/issues/1
+# "pyslop/no-isinstance-ladder" = "off"
+"""
+
+
+def _embed_toml(path: Path, prefix: str) -> str:
+    """Shipped standalone config rewritten as a [tool.<name>] block."""
+    out = [f"[{prefix}]"]
+    for line in path.read_text().splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and not stripped.startswith("[["):
+            out.append(f"[{prefix}.{stripped[1:]}")
+        else:
+            out.append(line)
+    return "\n".join(out).rstrip() + "\n"
+
+
+def _append_block(path: Path, block: str) -> None:
+    """Append a TOML/YAML text block, keeping one blank line of separation."""
+    text = path.read_text() if path.is_file() else ""
+    text = text.rstrip("\n")
+    path.write_text((text + "\n\n" if text else "") + block.rstrip("\n") + "\n")
+
+
+def _init_rev(root: Path) -> str:
+    """Pinned version for generated files: own git tag, else main."""
+    proc = subprocess.run(
+        ["git", "describe", "--tags"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    tag = proc.stdout.strip()
+    return tag if proc.returncode == 0 and tag else "main"
+
+
+def _pre_commit_entry(rev: str) -> str:
+    return f"""  - repo: local
+    hooks:
+      - id: pyslop
+        name: pyslop
+        entry: uv tool run --from git+https://github.com/zkewal/pyslop@{rev} pyslop check --no-ty
+        language: system
+        types: [python]
+        pass_filenames: true
+"""
+
+
+def _workflow_text(rev: str) -> str:
+    return f"""name: pyslop
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pyslop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      # Private repo: the runner needs read access (a fine-grained PAT).
+      - name: Check for slop
+        run: uv tool run --from git+https://github.com/zkewal/pyslop@{rev} pyslop check
+"""
+
+
+def init_command(root: str) -> int:
+    base = Path(root).resolve()
+    vendored = base / "tools" / "pyslop" / "rules"
+    if vendored.is_dir():
+        print(f"pyslop: {vendored} already present, skipping")
+    else:
+        shutil.copytree(bundled_rules_dir(), vendored)
+        print(f"pyslop: vendored rules to {vendored}")
+    pyproject = base / "pyproject.toml"
+    try:
+        tool = (
+            tomllib.loads(pyproject.read_text()).get("tool", {})
+            if pyproject.is_file()
+            else {}
+        )
+    except tomllib.TOMLDecodeError as exc:
+        print(f"pyslop: cannot parse {pyproject}: {exc}", file=sys.stderr)
+        return 2
+    for key, block in (
+        ("pyslop", PYSLOP_BLOCK),
+        ("ruff", _embed_toml(shipped_ruff_config(), "tool.ruff")),
+        ("ty", _embed_toml(bundled_ty_config(), "tool.ty")),
+    ):
+        if key in tool:
+            print(f"pyslop: [tool.{key}] already present, skipping")
+        else:
+            _append_block(pyproject, block)
+            print(f"pyslop: added [tool.{key}] to {pyproject}")
+    rev = _init_rev(base)
+    hook = base / ".pre-commit-config.yaml"
+    if hook.is_file():
+        existing = hook.read_text()
+        if "pyslop" in existing:
+            print(f"pyslop: {hook} already present, skipping")
+        elif "repos:" in existing:
+            _append_block(hook, _pre_commit_entry(rev))
+            print(f"pyslop: added hook to {hook}")
+        else:
+            print(f"pyslop: {hook} has no repos:, skipping")
+    else:
+        hook.write_text("repos:\n" + _pre_commit_entry(rev))
+        print(f"pyslop: wrote {hook}")
+    workflow = base / ".github" / "workflows" / "pyslop.yml"
+    if workflow.is_file():
+        print(f"pyslop: {workflow} already present, skipping")
+    else:
+        workflow.parent.mkdir(parents=True, exist_ok=True)
+        workflow.write_text(_workflow_text(rev))
+        print(f"pyslop: wrote {workflow}")
+    return 0
+
+
 def has_reason_comment(lines: list[str], lineno: int) -> bool:
     """True when the line directly above is a comment containing a URL."""
     prev = lines[lineno - 2] if lineno >= 2 else ""
@@ -556,6 +684,10 @@ def build_parser() -> argparse.ArgumentParser:
     format_cmd.add_argument(
         "paths", nargs="*", default=["."], help="Files or dirs (default: .)."
     )
+    init_cmd = sub.add_parser("init", help="Vendor rules and write configs.")
+    init_cmd.add_argument(
+        "path", nargs="?", default=".", help="Repo root (default: .)."
+    )
     return parser
 
 
@@ -565,4 +697,6 @@ def main(argv: list[str] | None = None) -> int:
         return check_command(args.paths, args.format, args.fix, args.no_ty, args.only)
     if args.command == "format":
         return format_command(args.paths)
+    if args.command == "init":
+        return init_command(args.path)
     raise AssertionError(f"unknown command {args.command}")

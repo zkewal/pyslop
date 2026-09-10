@@ -1,0 +1,9 @@
+[project]
+name = "fixture-custom"
+version = "0.0.0"
+
+[tool.mypy]
+strict = true
+
+[tool.ruff.lint]
+select = ["E", "F"]
