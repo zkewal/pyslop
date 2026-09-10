@@ -25,12 +25,17 @@ TY_CONCISE_RE = re.compile(
 )
 
 
+def bundled(*parts: str) -> Path:
+    """File shipped inside the package (rules, configs)."""
+    return Path(__file__).resolve().parent.joinpath(*parts)
+
+
 def bundled_rules_dir() -> Path:
-    return Path(__file__).resolve().parent / "rules"
+    return bundled("rules")
 
 
 def bundled_ty_config() -> Path:
-    return Path(__file__).resolve().parent / "config" / "ty.toml"
+    return bundled("config", "ty.toml")
 
 
 def walk_up(start: Path):
@@ -49,10 +54,17 @@ def nearest_pyproject(path: Path) -> Path | None:
     return None
 
 
+def require_binary(name: str) -> str | None:
+    """Engine binary path, or None after reporting it missing."""
+    binary = shutil.which(name)
+    if binary is None:
+        print(f"pyslop: {name} binary not found on PATH", file=sys.stderr)
+    return binary
+
+
 def discover_rules_dir(paths: list[str]) -> Path:
     """tools/pyslop/rules walking up from the first path, else bundled rules."""
-    start = Path(paths[0]).resolve() if paths else Path.cwd()
-    for candidate in walk_up(start):
+    for candidate in walk_up(_start(paths)):
         vendored = candidate / "tools" / "pyslop" / "rules"
         if vendored.is_dir():
             return vendored
@@ -76,9 +88,8 @@ def has_safety(lines: list[str], lineno: int) -> bool:
 
 def run_ty(paths: list[str]) -> list[dict] | None:
     """Run ty with the shipped strict config; None means the runner itself failed."""
-    binary = shutil.which("ty")
+    binary = require_binary("ty")
     if binary is None:
-        print("pyslop: ty binary not found on PATH", file=sys.stderr)
         return None
     proc = subprocess.run(
         [
@@ -120,27 +131,30 @@ def run_ty(paths: list[str]) -> list[dict] | None:
 
 
 def shipped_ruff_config() -> Path:
-    return Path(__file__).resolve().parent / "config" / "ruff.toml"
+    return bundled("config", "ruff.toml")
+
+
+def _start(paths: list[str]) -> Path:
+    """Resolved first checked path, or the working directory."""
+    return Path(paths[0]).resolve() if paths else Path.cwd()
 
 
 def ruff_config_args(paths: list[str]) -> list[str]:
     """--config shipped unless the nearest pyproject has [tool.ruff]."""
-    start = Path(paths[0]).resolve() if paths else Path.cwd()
-    pyproject = nearest_pyproject(start)
-    if pyproject is None:
-        return ["--config", str(shipped_ruff_config())]
+    pyproject = nearest_pyproject(_start(paths))
     try:
-        has_ruff = "ruff" in tomllib.loads(pyproject.read_text()).get("tool", {})
+        data = tomllib.loads(pyproject.read_text()) if pyproject else {}
     except (OSError, tomllib.TOMLDecodeError):
-        return ["--config", str(shipped_ruff_config())]
-    return [] if has_ruff else ["--config", str(shipped_ruff_config())]
+        data = {}
+    if "ruff" in data.get("tool", {}):
+        return []
+    return ["--config", str(shipped_ruff_config())]
 
 
 def run_ruff(paths: list[str], fix: bool) -> tuple[list[dict], int]:
     """Run ruff check, mapped to findings. Returns (findings, fatal_exit)."""
-    binary = shutil.which("ruff")
+    binary = require_binary("ruff")
     if binary is None:
-        print("pyslop: ruff binary not found on PATH", file=sys.stderr)
         return [], 2
     cmd = [binary, "check", "--output-format", "json", *ruff_config_args(paths)]
     if fix:
@@ -438,20 +452,9 @@ def check_pyproject_deviations(pyproject: Path) -> list[dict]:
                     )
                 )
             elif key.startswith("rules."):
-                for pair in PAIR_RE.finditer(raw):
-                    if pair.group("value").lower() != "off":
-                        continue
-                    if has_reason_comment(lines, lineno):
-                        continue
-                    findings.append(
-                        deviation_finding(
-                            pyproject,
-                            lineno,
-                            pair.start() + 1,
-                            f'Rule "{pair.group("key")}" is turned off '
-                            "without a reason.",
-                        )
-                    )
+                findings.extend(
+                    _scan_off_pairs(pyproject, lines, lineno, raw, "pyslop")
+                )
         elif section == "pyslop-rules":
             if OFF_VALUE_RE.match(value) and not has_reason_comment(lines, lineno):
                 findings.append(
@@ -480,18 +483,7 @@ def check_pyproject_deviations(pyproject: Path) -> list[dict]:
                 if depth > 0:
                     pending = "ty"
             elif key.startswith("rules."):
-                rule = key.split(".", 1)[1]
-                got = _unquote(value).lower()
-                if got in ("warn", "ignore") and not has_reason_comment(lines, lineno):
-                    findings.append(
-                        deviation_finding(
-                            pyproject,
-                            lineno,
-                            _col(raw),
-                            f'ty override sets "{rule}" to "{_unquote(value)}" '
-                            "without a reason.",
-                        )
-                    )
+                findings.extend(_scan_off_pairs(pyproject, lines, lineno, raw, "ty"))
     return findings
 
 
@@ -545,9 +537,8 @@ def apply_pyslop_config(findings: list[dict]) -> list[dict]:
 
 
 def format_command(paths: list[str]) -> int:
-    binary = shutil.which("ruff")
+    binary = require_binary("ruff")
     if binary is None:
-        print("pyslop: ruff binary not found on PATH", file=sys.stderr)
         return 2
     return subprocess.run([binary, "format", *paths], check=False).returncode
 
@@ -581,9 +572,8 @@ def check_command(
 ) -> int:
     findings: list[dict] = []
     if only in (None, "ast-grep"):
-        binary = shutil.which("ast-grep")
+        binary = require_binary("ast-grep")
         if binary is None:
-            print("pyslop: ast-grep binary not found on PATH", file=sys.stderr)
             return 2
         rules_dir = discover_rules_dir(paths)
         proc = subprocess.run(
