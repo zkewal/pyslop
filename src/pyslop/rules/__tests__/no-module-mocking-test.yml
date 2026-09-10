@@ -10,11 +10,23 @@ valid:
     monkeypatch.setattr(my_obj, "attr", 1)
   - |
     patch(my_obj)
+  - |
+    response = client.patch("/review/123/signals", json={})
+  - |
+    response = client.patch('/items/1')
+  - |
+    response = client.patch("/api/v1.2/items")
 invalid:
   - |
     patch("my.module.func")
   - |
     mock.patch("my.module.func")
+  - |
+    unittest.mock.patch("my.module.func")
+  - |
+    um.patch("my.module.func")
+  - |
+    módulo.patch("paquete.módulo.función")
   - |
     mocker.patch("my.module.func")
   - |
