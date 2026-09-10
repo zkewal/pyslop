@@ -1,0 +1,7 @@
+[project]
+name = "ty-override-bad"
+version = "0.1.0"
+
+[[tool.ty.overrides]]
+include = ["gen/**"]
+rules = { "unresolved-import" = "ignore" }
