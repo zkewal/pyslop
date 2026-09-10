@@ -1,3 +1,4 @@
+import json
 import shutil
 from pathlib import Path
 
@@ -52,6 +53,18 @@ def test_init_never_overwrites_existing_keys(tmp_path, capsys):
         workflow_before
     )
     assert "already present" in out
+
+
+def test_init_starts_deviation_clean(tmp_path, capsys):
+    root = fresh_repo(tmp_path)
+    assert main(["init", str(root)]) == 0
+    capsys.readouterr()
+    code = main(
+        ["check", str(root / "pyproject.toml"), "--format", "json", "--only", "pyslop"]
+    )
+    findings = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert findings == []
 
 
 def test_init_creates_pyproject_when_missing(tmp_path, capsys):

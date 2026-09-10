@@ -1,0 +1,6 @@
+[project]
+name = "exclude-fixture"
+version = "0.1.0"
+
+[tool.pyslop]
+exclude = ["gen/**"]

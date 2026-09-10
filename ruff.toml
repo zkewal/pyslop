@@ -3,5 +3,8 @@
 #
 # tests/fixtures/ruff/fix.py must stay unsorted: the --fix test proves
 # `pyslop check --fix` sorts it (see test_fix_sorts_imports_and_leaves_cast_untouched).
+# tests/fixtures/monorepo uses an undefined MONOREPO_SLOP marker: the --only
+# ast-grep test proves the vendored root rules fire and excludes apply.
 [lint.per-file-ignores]
 "tests/fixtures/ruff/fix.py" = ["I001"]
+"tests/fixtures/monorepo/*.py" = ["F821"]

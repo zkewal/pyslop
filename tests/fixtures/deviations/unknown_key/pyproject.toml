@@ -1,0 +1,8 @@
+[project]
+name = "unknown-key"
+version = "0.1.0"
+
+[tool.pyslop]
+# documented consumer block: https://linear.app/x/DEX-3
+rules = { "pyslop/no-module-mocking" = "off" }
+stranger = true
