@@ -1,0 +1,23 @@
+id: pyslop/no-blanket-ignore
+snapshots:
+  ? |
+    x = 1  # ty: ignore
+  : labels:
+    - source: '# ty: ignore'
+      style: primary
+      start: 7
+      end: 19
+  ? |
+    x = 1  # type: ignore
+  : labels:
+    - source: '# type: ignore'
+      style: primary
+      start: 7
+      end: 21
+  ? |
+    x = 1  # type: ignore  # SAFETY: still bare, still wrong
+  : labels:
+    - source: '# type: ignore  # SAFETY: still bare, still wrong'
+      style: primary
+      start: 7
+      end: 56

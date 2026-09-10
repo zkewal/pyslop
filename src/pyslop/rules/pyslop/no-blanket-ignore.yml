@@ -1,0 +1,11 @@
+id: pyslop/no-blanket-ignore
+language: python
+severity: error
+rule:
+  all:
+    - kind: comment
+    - regex: "#\\s*(type|ty)\\s*:\\s*ignore"
+    - not:
+        regex: "#\\s*(type|ty)\\s*:\\s*ignore\\s*\\["
+message: Bare ignore comment without an error code.
+note: "Name what you suppress: `# type: ignore[code]` / `# ty: ignore[code]`. Bare `# noqa` is covered by ruff PGH004."
