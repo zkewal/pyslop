@@ -1,0 +1,39 @@
+# Shipped ruff config for pyslop. Used via `ruff --config` when the consumer
+# pyproject has no [tool.ruff] section; otherwise the consumer config wins.
+# Preview off (default). Rule families are documented in docs/config/ruff.md.
+target-version = "py312"
+preview = false
+
+[lint]
+# D203/D213 are already dropped by ruff in favour of D211/D212; listing them
+# silences the incompatible-pair warning on every run. No behaviour change.
+ignore = ["D203", "D213"]
+select = [
+  "E",
+  "F",
+  "W",
+  "I",
+  "UP",
+  "B",
+  "ANN",
+  "BLE",
+  "TRY",
+  "S110",
+  "S112",
+  "ERA",
+  "ARG",
+  "FBT",
+  "PLR09",
+  "C90",
+  "RET",
+  "SIM",
+  "PERF",
+  "FURB",
+  "PIE",
+  "PGH",
+  "RUF",
+  "T20",
+  "TD",
+  "FIX",
+  "D2",
+]
