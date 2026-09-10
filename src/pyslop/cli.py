@@ -27,15 +27,58 @@ def bundled_ty_config() -> Path:
     return Path(__file__).resolve().parent / "config" / "ty.toml"
 
 
+def walk_up(start: Path):
+    """Yield a dir (or a file's parent) then each parent up to the root."""
+    directory = start if start.is_dir() else start.parent
+    yield directory
+    yield from directory.parents
+
+
+def nearest_pyproject(path: Path) -> Path | None:
+    """Nearest pyproject.toml walking up, or None."""
+    for candidate in walk_up(path):
+        pyproject = candidate / "pyproject.toml"
+        if pyproject.is_file():
+            return pyproject
+    return None
+
+
 def discover_rules_dir(paths: list[str]) -> Path:
     """tools/pyslop/rules walking up from the first path, else bundled rules."""
     start = Path(paths[0]).resolve() if paths else Path.cwd()
-    directory = start if start.is_dir() else start.parent
-    for candidate in (directory, *directory.parents):
+    for candidate in walk_up(start):
         vendored = candidate / "tools" / "pyslop" / "rules"
         if vendored.is_dir():
             return vendored
     return bundled_rules_dir()
+
+
+def pyslop_excludes(pyproject: Path) -> list[str]:
+    """Exclude globs from [tool.pyslop]. Minimal read; ticket 07 owns the parser."""
+    try:
+        data = tomllib.loads(pyproject.read_text())
+    except (OSError, tomllib.TOMLDecodeError):
+        return []
+    exclude = data.get("tool", {}).get("pyslop", {}).get("exclude", [])
+    return list(exclude) if isinstance(exclude, list) else []
+
+
+def is_excluded(file: str, cache: dict[str, list[str]]) -> bool:
+    """True when the file matches an exclude glob from its nearest pyproject."""
+    resolved = Path(file).resolve()
+    pyproject = nearest_pyproject(resolved)
+    if pyproject is None:
+        return False
+    key = str(pyproject)
+    if key not in cache:
+        cache[key] = pyslop_excludes(pyproject)
+    if not cache[key]:
+        return False
+    try:
+        rel = resolved.relative_to(pyproject.parent)
+    except ValueError:
+        return False
+    return any(rel.match(pattern) for pattern in cache[key])
 
 
 def has_safety(lines: list[str], lineno: int) -> bool:
@@ -97,18 +140,14 @@ def shipped_ruff_config() -> Path:
 def ruff_config_args(paths: list[str]) -> list[str]:
     """--config shipped unless the nearest pyproject has [tool.ruff]."""
     start = Path(paths[0]).resolve() if paths else Path.cwd()
-    directory = start if start.is_dir() else start.parent
-    for candidate in (directory, *directory.parents):
-        pyproject = candidate / "pyproject.toml"
-        if pyproject.is_file():
-            try:
-                has_ruff = "ruff" in tomllib.loads(pyproject.read_text()).get(
-                    "tool", {}
-                )
-            except (OSError, tomllib.TOMLDecodeError):
-                break
-            return [] if has_ruff else ["--config", str(shipped_ruff_config())]
-    return ["--config", str(shipped_ruff_config())]
+    pyproject = nearest_pyproject(start)
+    if pyproject is None:
+        return ["--config", str(shipped_ruff_config())]
+    try:
+        has_ruff = "ruff" in tomllib.loads(pyproject.read_text()).get("tool", {})
+    except (OSError, tomllib.TOMLDecodeError):
+        return ["--config", str(shipped_ruff_config())]
+    return [] if has_ruff else ["--config", str(shipped_ruff_config())]
 
 
 def run_ruff(paths: list[str], fix: bool) -> tuple[list[dict], int]:
@@ -150,6 +189,26 @@ def format_command(paths: list[str]) -> int:
         print("pyslop: ruff binary not found on PATH", file=sys.stderr)
         return 2
     return subprocess.run([binary, "format", *paths], check=False).returncode
+
+
+def print_text(findings: list[dict]) -> None:
+    """One line per finding grouped by file, plus a summary. No color unless a TTY."""
+    ordered = sorted(
+        findings,
+        key=lambda f: (f["file"], f["line"], f["col"], f["engine"], f["rule"]),
+    )
+    color = sys.stdout.isatty()
+    for finding in ordered:
+        loc = f"{finding['file']}:{finding['line']}:{finding['col']}"
+        if color:
+            loc = f"\x1b[1m{loc}\x1b[0m"
+        print(f"{loc} {finding['engine']}/{finding['rule']} {finding['message']}")
+    total = len(ordered)
+    errors = sum(1 for finding in ordered if finding["severity"] == "error")
+    print(
+        f"{total} finding{'s' if total != 1 else ''} "
+        f"({errors} error{'s' if errors != 1 else ''})"
+    )
 
 
 def check_command(
@@ -220,15 +279,12 @@ def check_command(
         if ty_findings is None:
             return 2
         findings.extend(ty_findings)
+    excluded: dict[str, list[str]] = {}
+    findings = [f for f in findings if not is_excluded(f["file"], excluded)]
     if format == "json":
         print(json.dumps(findings, indent=2))
     else:
-        for finding in findings:
-            print(
-                f"{finding['file']}:{finding['line']}:{finding['col']}: "
-                f"[{finding['rule']}] {finding['message']} "
-                f"(fix: {finding['fix_hint']})"
-            )
+        print_text(findings)
     return 1 if any(f["severity"] == "error" for f in findings) else 0
 
 
