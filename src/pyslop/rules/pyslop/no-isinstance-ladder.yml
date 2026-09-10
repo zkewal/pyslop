@@ -1,0 +1,26 @@
+id: pyslop/no-isinstance-ladder
+language: python
+severity: error
+rule:
+  all:
+    - kind: if_statement
+    - has:
+        field: condition
+        pattern: isinstance($X, $A)
+    - has:
+        all:
+          - kind: elif_clause
+          - has:
+              field: condition
+              pattern: isinstance($X, $B)
+          - follows:
+              all:
+                - kind: elif_clause
+                - has:
+                    field: condition
+                    pattern: isinstance($X, $C)
+constraints:
+  X:
+    kind: identifier
+message: Three or more isinstance() checks on one value in an if/elif chain.
+note: Parse at the boundary instead (pydantic model or match statement).

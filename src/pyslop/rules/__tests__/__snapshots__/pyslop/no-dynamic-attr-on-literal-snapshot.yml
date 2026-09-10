@@ -1,0 +1,30 @@
+id: pyslop/no-dynamic-attr-on-literal
+snapshots:
+  ? |
+    ok = hasattr(obj, "name")
+  : labels:
+    - source: hasattr(obj, "name")
+      style: primary
+      start: 5
+      end: 25
+  ? |
+    setattr(obj, "name", value)
+  : labels:
+    - source: setattr(obj, "name", value)
+      style: primary
+      start: 0
+      end: 27
+  ? |
+    value = getattr(obj, "name")
+  : labels:
+    - source: getattr(obj, "name")
+      style: primary
+      start: 8
+      end: 28
+  ? |
+    value = getattr(obj, "name", default)
+  : labels:
+    - source: getattr(obj, "name", default)
+      style: primary
+      start: 8
+      end: 37

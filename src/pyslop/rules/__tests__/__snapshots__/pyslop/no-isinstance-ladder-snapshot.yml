@@ -1,0 +1,94 @@
+id: pyslop/no-isinstance-ladder
+snapshots:
+  ? |
+    def f(x):
+        if isinstance(x, int):
+            return 1
+        elif isinstance(x, str):
+            return 2
+        elif isinstance(x, float):
+            return 3
+        elif isinstance(x, bool):
+            return 4
+        return 0
+  : labels:
+    - source: |-
+        if isinstance(x, int):
+                return 1
+            elif isinstance(x, str):
+                return 2
+            elif isinstance(x, float):
+                return 3
+            elif isinstance(x, bool):
+                return 4
+      style: primary
+      start: 14
+      end: 194
+    - source: isinstance(x, int)
+      style: secondary
+      start: 17
+      end: 35
+    - source: isinstance(x, float)
+      style: secondary
+      start: 109
+      end: 129
+    - source: isinstance(x, str)
+      style: secondary
+      start: 63
+      end: 81
+    - source: |-
+        elif isinstance(x, str):
+                return 2
+      style: secondary
+      start: 58
+      end: 99
+    - source: |-
+        elif isinstance(x, float):
+                return 3
+      style: secondary
+      start: 104
+      end: 147
+  ? |
+    def f(x):
+        if isinstance(x, int):
+            return 1
+        elif isinstance(x, str):
+            return 2
+        elif isinstance(x, float):
+            return 3
+        return 0
+  : labels:
+    - source: |-
+        if isinstance(x, int):
+                return 1
+            elif isinstance(x, str):
+                return 2
+            elif isinstance(x, float):
+                return 3
+      style: primary
+      start: 14
+      end: 147
+    - source: isinstance(x, int)
+      style: secondary
+      start: 17
+      end: 35
+    - source: isinstance(x, float)
+      style: secondary
+      start: 109
+      end: 129
+    - source: isinstance(x, str)
+      style: secondary
+      start: 63
+      end: 81
+    - source: |-
+        elif isinstance(x, str):
+                return 2
+      style: secondary
+      start: 58
+      end: 99
+    - source: |-
+        elif isinstance(x, float):
+                return 3
+      style: secondary
+      start: 104
+      end: 147

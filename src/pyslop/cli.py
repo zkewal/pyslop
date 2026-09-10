@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 SAFETY_RULE = "pyslop/require-safety-comment"
@@ -89,7 +90,69 @@ def run_ty(paths: list[str]) -> list[dict] | None:
     return findings
 
 
-def check_command(paths: list[str], format: str, no_ty: bool = False) -> int:
+def shipped_ruff_config() -> Path:
+    return Path(__file__).resolve().parent / "config" / "ruff.toml"
+
+
+def ruff_config_args(paths: list[str]) -> list[str]:
+    """--config shipped unless the nearest pyproject has [tool.ruff]."""
+    start = Path(paths[0]).resolve() if paths else Path.cwd()
+    directory = start if start.is_dir() else start.parent
+    for candidate in (directory, *directory.parents):
+        pyproject = candidate / "pyproject.toml"
+        if pyproject.is_file():
+            try:
+                has_ruff = "ruff" in tomllib.loads(pyproject.read_text()).get(
+                    "tool", {}
+                )
+            except (OSError, tomllib.TOMLDecodeError):
+                break
+            return [] if has_ruff else ["--config", str(shipped_ruff_config())]
+    return ["--config", str(shipped_ruff_config())]
+
+
+def run_ruff(paths: list[str], fix: bool) -> tuple[list[dict], int]:
+    """Run ruff check, mapped to findings. Returns (findings, fatal_exit)."""
+    binary = shutil.which("ruff")
+    if binary is None:
+        print("pyslop: ruff binary not found on PATH", file=sys.stderr)
+        return [], 2
+    cmd = [binary, "check", "--output-format", "json", *ruff_config_args(paths)]
+    if fix:
+        cmd.append("--fix")
+    proc = subprocess.run([*cmd, *paths], capture_output=True, text=True, check=False)
+    if proc.returncode not in (0, 1):
+        print(f"pyslop: ruff failed:\n{proc.stderr}", file=sys.stderr)
+        return [], 2
+    try:
+        raw = json.loads(proc.stdout if proc.stdout.strip() else "[]")
+    except json.JSONDecodeError:
+        print(f"pyslop: could not parse ruff output:\n{proc.stderr}", file=sys.stderr)
+        return [], 2
+    return [
+        {
+            "engine": "ruff",
+            "rule": item.get("code", ""),
+            "file": item.get("filename", ""),
+            "line": item["location"]["row"],
+            "col": item["location"]["column"],
+            "message": item.get("message") or "",
+            "fix_hint": (item.get("fix") or {}).get("message") or "",
+            "severity": item.get("severity") or "error",
+        }
+        for item in raw
+    ], 0
+
+
+def format_command(paths: list[str]) -> int:
+    binary = shutil.which("ruff")
+    if binary is None:
+        print("pyslop: ruff binary not found on PATH", file=sys.stderr)
+        return 2
+    return subprocess.run([binary, "format", *paths], check=False).returncode
+
+
+def check_command(paths: list[str], format: str, fix: bool, no_ty: bool) -> int:
     binary = shutil.which("ast-grep")
     if binary is None:
         print("pyslop: ast-grep binary not found on PATH", file=sys.stderr)
@@ -132,6 +195,10 @@ def check_command(paths: list[str], format: str, no_ty: bool = False) -> int:
                 "severity": item.get("severity") or "error",
             }
         )
+    ruff_findings, fatal = run_ruff(paths, fix)
+    if fatal:
+        return fatal
+    findings.extend(ruff_findings)
     if not no_ty:
         ty_findings = run_ty(paths)
         if ty_findings is None:
@@ -162,11 +229,22 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument(
         "--no-ty", action="store_true", help="Skip ty (pre-commit speed)."
     )
+    check.add_argument(
+        "--fix",
+        action="store_true",
+        help="Apply safe ruff fixes (never --unsafe-fixes).",
+    )
+    format_cmd = sub.add_parser("format", help="Run ruff format over paths.")
+    format_cmd.add_argument(
+        "paths", nargs="*", default=["."], help="Files or dirs (default: .)."
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "check":
-        return check_command(args.paths, args.format, args.no_ty)
+        return check_command(args.paths, args.format, args.fix, args.no_ty)
+    if args.command == "format":
+        return format_command(args.paths)
     raise AssertionError(f"unknown command {args.command}")

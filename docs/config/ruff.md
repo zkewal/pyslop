@@ -1,0 +1,51 @@
+# Shipped ruff config
+
+Pyslop ships a curated ruff config at `src/pyslop/config/ruff.toml` (bundled in
+the wheel like the rules). `pyslop check` passes it via `ruff --config` when
+the nearest `pyproject.toml` has no `[tool.ruff]` section; a consumer config
+always wins when present. Preview off, `target-version = "py312"`.
+
+Ruff carries the rules it already has so pyslop only adds the gaps via
+ast-grep. Families selected:
+
+- **E, W** (pycodestyle errors/warnings): basic hygiene, keeps diffs clean.
+- **F** (pyflakes): unused imports/names, undefined names. Dead code is where
+  slop hides.
+- **I** (isort): sorted imports. Required for `--fix` to be deterministic.
+- **UP** (pyupgrade): modern syntax for the floor version (`X | None`, `match`
+  idioms). Old idioms invite untyped patterns.
+- **B** (flake8-bugbear): likely bugs (mutable defaults, unused loop vars).
+- **ANN** (flake8-annotations): annotations required everywhere. Includes
+  **ANN401**, which bans `Any` in annotations — the ruff side of the evidence
+  rules; `pyslop/require-safety-comment` covers the rest.
+- **BLE** (flake8-blind-except): no blind `except Exception` / bare `except`.
+- **TRY** (tryceratops): `raise` without `from`, verbose logging in handlers.
+- **S110, S112** (flake8-bandit): `try/except/pass` and `try/except/continue`
+  — silent swallowing. (Full `S` is off: bandit needs per-repo tuning.)
+- **ERA** (eradicate): dead commented-out code.
+- **ARG** (flake8-unused-arguments): unused function arguments, including
+  `**kwargs` no one reads.
+- **FBT** (flake8-boolean-trap): boolean positional args/traps in signatures.
+- **PLR09** (pylint refactor): too many branches/returns/statements — long
+  functions accumulate untyped shortcuts.
+- **C90** (mccabe): complexity cap, same reason as PLR09.
+- **RET** (flake8-return): redundant `else: return`, missing explicit return.
+- **SIM** (flake8-simplify): `isinstance` nests and other simplifiable shapes
+  that hide data contracts.
+- **PERF** (perflint): list-building anti-patterns.
+- **FURB** (refurb): modern idioms the type checker understands better.
+- **PIE** (flake8-pie): miscellaneous correctness (`unnecessary-pass`, …).
+- **PGH** (pygrep-hooks): e.g. **PGH003** bans blanket `# type: ignore`
+  without a code — pairs with the SAFETY rule.
+- **RUF** (ruff-specific): e.g. **RUF100** flags unused `noqa`, so
+  suppressions cannot linger after the violation is gone.
+- **T20** (flake8-print): no `print` in shipped code — use logging.
+- **TD** (flake8-todo): `TODO`/`FIXME` stay visible as findings, never silent.
+- **FIX** (flake8-fixme): same as TD for `FIXME`/`XXX`/`HACK`.
+- **D2** (pydocstyle blanks/structure): docstring formatting only. `D1xx`
+  (missing docstrings) is deliberately off — that is a style rollout per repo,
+  not slop.
+
+Note: selecting all of `D2` pulls in the mutually incompatible pairs
+`D203`/`D211` and `D212`/`D213`. The shipped config explicitly ignores
+`D203`/`D213`, matching ruff's own resolution, so runs stay warning-free.
