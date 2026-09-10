@@ -1,0 +1,23 @@
+id: pyslop/no-dynamic-attr-on-literal
+valid:
+  - |
+    value = getattr(obj, name)
+  - |
+    value = getattr(obj, name, default)
+  - |
+    ok = hasattr(obj, name)
+  - |
+    setattr(obj, name, value)
+  - |
+    value = getattr(obj, f"{name}")
+  - |
+    value = obj.name
+invalid:
+  - |
+    value = getattr(obj, "name")
+  - |
+    value = getattr(obj, "name", default)
+  - |
+    ok = hasattr(obj, "name")
+  - |
+    setattr(obj, "name", value)
