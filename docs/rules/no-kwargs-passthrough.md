@@ -22,8 +22,7 @@ def create_tour(**kwargs):
     return _build(**kwargs)
 
 
-def update_tour(tour_id: int, **kwargs: Any):
-    ...
+def update_tour(tour_id: int, **kwargs: Any): ...
 ```
 
 Each function above is one finding: a public name with untyped `**kwargs`.

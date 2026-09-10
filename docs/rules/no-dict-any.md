@@ -21,16 +21,13 @@ and return annotations, where the shape is a promise to callers.
 from typing import Any
 
 
-def load_config(raw: dict[str, Any]):
-    ...
+def load_config(raw: dict[str, Any]): ...
 
 
-def fetch() -> dict[str, Any]:
-    ...
+def fetch() -> dict[str, Any]: ...
 
 
-def index(rows: Mapping[str, Any]):
-    ...
+def index(rows: Mapping[str, Any]): ...
 ```
 
 Each signature above is one finding.
@@ -45,12 +42,10 @@ class Config(TypedDict):
     retries: int
 
 
-def load_config(raw: Config):
-    ...
+def load_config(raw: Config): ...
 
 
-def parse() -> Config:
-    ...
+def parse() -> Config: ...
 
 
 def scrub():
