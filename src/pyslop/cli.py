@@ -248,9 +248,11 @@ def _pre_commit_entry(rev: str) -> str:
                 "    hooks:",
                 "      - id: pyslop",
                 "        name: pyslop",
-                "        entry: uv tool run "
-                f"--from git+https://github.com/zkewal/pyslop@{rev} "
-                "pyslop check --no-ty",
+                (
+                    "        entry: uv tool run "
+                    f"--from git+https://github.com/zkewal/pyslop@{rev} "
+                    "pyslop check --no-ty"
+                ),
                 "        language: system",
                 "        types: [python]",
                 "        pass_filenames: true",
