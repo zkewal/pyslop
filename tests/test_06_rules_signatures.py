@@ -26,7 +26,7 @@ def test_kwargs_bad_flags_public_untyped_kwargs(
         capsys, "kwargs_bad.py", "pyslop/no-kwargs-passthrough"
     )
     assert code == 1
-    assert sorted(f["line"] for f in kwargs) == [1, 5, 9]
+    assert sorted(f["line"] for f in kwargs) == [1, 5, 9, 13, 17]
     for finding in kwargs:
         assert finding["engine"] == "ast-grep"
         assert finding["severity"] == "error"

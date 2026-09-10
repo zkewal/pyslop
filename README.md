@@ -14,10 +14,12 @@ This is a private repo. Install a pinned tag with `uv` (CI and fresh machines ne
 GitHub read token for the repo):
 
 ```bash
-uv tool run --from git+https://github.com/zkewal/pyslop@v0.1.0 pyslop --version
+uv tool run --from git+https://github.com/zkewal/pyslop@v0.1.1 pyslop --version
 ```
 
-From a checkout, `uv sync` then `uv run pyslop ...`.
+Engine versions are pinned exactly (`==` in `pyproject.toml`), so a tag
+install resolves identically everywhere — `uv.lock` is not consulted for
+tool installs. From a checkout, `uv sync` then `uv run pyslop ...`.
 
 ## Usage
 

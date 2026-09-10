@@ -9,6 +9,21 @@ Design record: `~/Desktop/ho-repos/research-notes/python-anti-slop-toolkit-2026-
 - No baseline file. Existing violations are handled with per-path deviations carrying an issue link, removed one rule per PR.
 - Autofix only for safe ruff rewrites. Never evidence rules.
 - Private repo, git-tag versions, installed via `uv tool run --from git+https://github.com/zkewal/pyslop@<tag> pyslop`.
+- Adoption correctness (v0.1.1): engines fail closed — an ast-grep crash,
+  an empty/malformed payload (including rc 1 with `[]`), or ty
+  diagnostics that do not parse are exit 2, never a silent green.
+  Consumer ty config (`ty.toml` / `[tool.ty]`) is honored via ty's own
+  `--project` discovery; with no consumer config only `--error all` is
+  added and the floor comes natively from `requires-python` — no config
+  file is ever forced, no PEP440 parsing in the runner. Engine deps are
+  `==` pinned (tool installs ignore `uv.lock`, so only metadata pins
+  reproduce). `[tool.pyslop] exclude` is single-matcher gitignore via
+  pathspec (`!` reincludes; bad globs are loud and exclude nothing).
+  Generated hook/workflow pins come from the installed pyslop release,
+  never the consumer's git tags; generated `[tool.ty.rules]` carries no
+  floor. Strict defaults are preserved because the bundled `[environment]`
+  holds nothing but `python-version`, and `--error all` escalates every
+  rule including post-pin additions.
 
 ## When you hit a rule ast-grep YAML cannot express
 If a rule needs scope resolution or dataflow (e.g. "is this name ever re-raised anywhere in the function"),
