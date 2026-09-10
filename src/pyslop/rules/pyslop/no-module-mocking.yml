@@ -1,0 +1,13 @@
+id: pyslop/no-module-mocking
+language: python
+severity: error
+rule:
+  any:
+    - pattern: 'patch("$P")'
+    - pattern: 'patch("$P", $$$)'
+    - pattern: '$M.patch("$P")'
+    - pattern: '$M.patch("$P", $$$)'
+    - pattern: 'monkeypatch.setattr("$T")'
+    - pattern: 'monkeypatch.setattr("$T", $$$)'
+message: Test mocks a module by dotted string path.
+note: "Use a real seam (dependency injection, protocol, or fixture) instead of patch('dotted.path'). patch.object and monkeypatch.setattr(obj, 'attr', v) are allowed."

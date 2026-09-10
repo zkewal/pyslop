@@ -1,0 +1,37 @@
+id: pyslop/no-module-mocking
+snapshots:
+  ? |
+    mock.patch("my.module.func")
+  : labels:
+    - source: mock.patch("my.module.func")
+      style: primary
+      start: 0
+      end: 28
+  ? |
+    mocker.patch("my.module.func")
+  : labels:
+    - source: mocker.patch("my.module.func")
+      style: primary
+      start: 0
+      end: 30
+  ? |
+    monkeypatch.setattr("my.module.func", lambda: 1)
+  : labels:
+    - source: 'monkeypatch.setattr("my.module.func", lambda: 1)'
+      style: primary
+      start: 0
+      end: 48
+  ? |
+    patch("my.module.func")
+  : labels:
+    - source: patch("my.module.func")
+      style: primary
+      start: 0
+      end: 23
+  ? |
+    patch("my.module.func", return_value=1)
+  : labels:
+    - source: patch("my.module.func", return_value=1)
+      style: primary
+      start: 0
+      end: 39
