@@ -1,0 +1,7 @@
+# Self-lint config for plain `ruff check` / `ruff format` runs on this repo.
+# (The shipped consumer config lives in src/pyslop/config/ruff.toml.)
+#
+# tests/fixtures/ruff/fix.py must stay unsorted: the --fix test proves
+# `pyslop check --fix` sorts it (see test_fix_sorts_imports_and_leaves_cast_untouched).
+[lint.per-file-ignores]
+"tests/fixtures/ruff/fix.py" = ["I001"]

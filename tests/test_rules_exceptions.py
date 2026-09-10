@@ -11,7 +11,9 @@ NO_BLANKET = "pyslop/no-blanket-ignore"
 
 
 def test_handlers_that_neither_raise_nor_return_are_reported(capsys):
-    code = main(["check", str(EXCEPTIONS / "bad.py"), "--format", "json"])
+    code = main(
+        ["check", str(EXCEPTIONS / "bad.py"), "--format", "json", "--only", "ast-grep"]
+    )
     findings = [
         f for f in json.loads(capsys.readouterr().out) if f["rule"] == SWALLOWED
     ]
@@ -25,13 +27,24 @@ def test_handlers_that_neither_raise_nor_return_are_reported(capsys):
 
 
 def test_handlers_that_reraise_or_return_exit_zero(capsys):
-    code = main(["check", str(EXCEPTIONS / "good.py"), "--format", "json"])
+    code = main(
+        [
+            "check",
+            str(EXCEPTIONS / "good.py"),
+            "--format",
+            "json",
+            "--only",
+            "ast-grep",
+        ]
+    )
     assert code == 0
     assert json.loads(capsys.readouterr().out) == []
 
 
 def test_bare_ignores_are_reported_even_with_safety(capsys):
-    code = main(["check", str(BLANKET / "bad.py"), "--format", "json"])
+    code = main(
+        ["check", str(BLANKET / "bad.py"), "--format", "json", "--only", "ast-grep"]
+    )
     findings = [
         f for f in json.loads(capsys.readouterr().out) if f["rule"] == NO_BLANKET
     ]
@@ -45,6 +58,8 @@ def test_bare_ignores_are_reported_even_with_safety(capsys):
 
 
 def test_coded_ignores_with_reasons_exit_zero(capsys):
-    code = main(["check", str(BLANKET / "good.py"), "--format", "json"])
+    code = main(
+        ["check", str(BLANKET / "good.py"), "--format", "json", "--only", "ast-grep"]
+    )
     assert code == 0
     assert json.loads(capsys.readouterr().out) == []
