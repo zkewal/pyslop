@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import sys
 import tomllib
+from collections.abc import Iterator
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path, PurePath
 
 SAFETY_RULE = "pyslop/require-safety-comment"
@@ -639,9 +641,19 @@ def check_command(
     return 1 if any(f["severity"] == "error" for f in findings) else 0
 
 
+def _pyslop_version() -> str:
+    try:
+        return version("pyslop")
+    except PackageNotFoundError:
+        return "unknown"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pyslop", description="Deterministic anti-slop toolkit for Python."
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {_pyslop_version()}"
     )
     sub = parser.add_subparsers(dest="command", required=True)
     check = sub.add_parser("check", help="Run vendored rules over paths.")
