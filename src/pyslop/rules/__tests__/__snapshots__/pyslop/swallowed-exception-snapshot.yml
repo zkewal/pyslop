@@ -1,0 +1,70 @@
+id: pyslop/swallowed-exception
+snapshots:
+  ? |
+    for _ in range(3):
+        try:
+            x()
+        except ValueError:
+            continue
+  : labels:
+    - source: |-
+        except ValueError:
+                continue
+      style: primary
+      start: 44
+      end: 79
+  ? |
+    import logging
+    try:
+        x()
+    except ValueError as e:
+        logging.exception("failed")
+  : labels:
+    - source: |-
+        except ValueError as e:
+            logging.exception("failed")
+      style: primary
+      start: 28
+      end: 83
+  ? |
+    try:
+        x()
+    except Exception as e:
+        print(e)
+  : labels:
+    - source: |-
+        except Exception as e:
+            print(e)
+      style: primary
+      start: 13
+      end: 48
+  ? |
+    try:
+        x()
+    except ValueError:
+        pass
+  : labels:
+    - source: |-
+        except ValueError:
+            pass
+      style: primary
+      start: 13
+      end: 40
+  ? |
+    try:
+        x()
+    except ValueError:
+        try:
+            fallback()
+        except OSError:
+            pass
+  : labels:
+    - source: |-
+        except ValueError:
+            try:
+                fallback()
+            except OSError:
+                pass
+      style: primary
+      start: 13
+      end: 92
