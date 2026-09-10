@@ -12,6 +12,7 @@ import tomllib
 from collections.abc import Iterator
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path, PurePath
+from typing import Any, TypedDict
 
 SAFETY_RULE = "pyslop/require-safety-comment"
 SAFETY_RE = re.compile(r"#\s*SAFETY\s*:\s*\S")
@@ -25,6 +26,8 @@ TY_CONCISE_RE = re.compile(
     r"^(?P<file>.+):(?P<line>\d+):(?P<col>\d+): "
     r"(?P<severity>\w+)\[(?P<rule>[^\]]+)\] (?P<message>.*)$"
 )
+# SAFETY: finding mappings mix str and int values by design.
+Finding = dict[str, Any]
 
 
 def bundled(*parts: str) -> Path:
@@ -40,7 +43,17 @@ def bundled_ty_config() -> Path:
     return bundled("config", "ty.toml")
 
 
-def walk_up(start: Path):
+def emit(text: str) -> None:
+    """One line to stdout (the shipped T20 rules ban print())."""
+    sys.stdout.write(text + "\n")
+
+
+def emit_error(text: str) -> None:
+    """One line to stderr."""
+    sys.stderr.write(text + "\n")
+
+
+def walk_up(start: Path) -> Iterator[Path]:
     """Yield a dir (or a file's parent) then each parent up to the root."""
     directory = start if start.is_dir() else start.parent
     yield directory
@@ -60,7 +73,7 @@ def require_binary(name: str) -> str | None:
     """Engine binary path, or None after reporting it missing."""
     binary = shutil.which(name)
     if binary is None:
-        print(f"pyslop: {name} binary not found on PATH", file=sys.stderr)
+        emit_error(f"pyslop: {name} binary not found on PATH")
     return binary
 
 
@@ -75,10 +88,7 @@ def discover_rules_dir(paths: list[str]) -> Path:
 
 def pyslop_excludes(pyproject: Path) -> list[str]:
     """Exclude globs from [tool.pyslop]. Thin wrapper over pyslop_table."""
-    exclude = pyslop_table(pyproject).get("exclude", [])
-    if not isinstance(exclude, list):
-        return []
-    return [e for e in exclude if isinstance(e, str)]
+    return pyslop_table(pyproject).get("exclude", [])
 
 
 def has_safety(lines: list[str], lineno: int) -> bool:
@@ -88,7 +98,7 @@ def has_safety(lines: list[str], lineno: int) -> bool:
     return bool(SAFETY_RE.search(same) or SAFETY_RE.search(prev))
 
 
-def run_ty(paths: list[str]) -> list[dict] | None:
+def run_ty(paths: list[str]) -> list[Finding] | None:
     """Run ty with the shipped strict config; None means the runner itself failed."""
     binary = require_binary("ty")
     if binary is None:
@@ -110,7 +120,7 @@ def run_ty(paths: list[str]) -> list[dict] | None:
         check=False,
     )
     if proc.returncode not in (0, 1):
-        print(f"pyslop: ty check failed:\n{proc.stderr}", file=sys.stderr)
+        emit_error(f"pyslop: ty check failed:\n{proc.stderr}")
         return None
     findings = []
     for line in proc.stdout.splitlines():
@@ -147,13 +157,13 @@ def ruff_config_args(paths: list[str]) -> list[str]:
     try:
         data = tomllib.loads(pyproject.read_text()) if pyproject else {}
     except (OSError, tomllib.TOMLDecodeError):
-        data = {}
+        return ["--config", str(shipped_ruff_config())]
     if "ruff" in data.get("tool", {}):
         return []
     return ["--config", str(shipped_ruff_config())]
 
 
-def run_ruff(paths: list[str], fix: bool) -> tuple[list[dict], int]:
+def run_ruff(paths: list[str], *, fix: bool) -> tuple[list[Finding], int]:
     """Run ruff check, mapped to findings. Returns (findings, fatal_exit)."""
     binary = require_binary("ruff")
     if binary is None:
@@ -163,12 +173,12 @@ def run_ruff(paths: list[str], fix: bool) -> tuple[list[dict], int]:
         cmd.append("--fix")
     proc = subprocess.run([*cmd, *paths], capture_output=True, text=True, check=False)
     if proc.returncode not in (0, 1):
-        print(f"pyslop: ruff failed:\n{proc.stderr}", file=sys.stderr)
+        emit_error(f"pyslop: ruff failed:\n{proc.stderr}")
         return [], 2
     try:
         raw = json.loads(proc.stdout if proc.stdout.strip() else "[]")
     except json.JSONDecodeError:
-        print(f"pyslop: could not parse ruff output:\n{proc.stderr}", file=sys.stderr)
+        emit_error(f"pyslop: could not parse ruff output:\n{proc.stderr}")
         return [], 2
     return [
         {
@@ -231,15 +241,23 @@ def _init_rev(root: Path) -> str:
 
 
 def _pre_commit_entry(rev: str) -> str:
-    return f"""  - repo: local
-    hooks:
-      - id: pyslop
-        name: pyslop
-        entry: uv tool run --from git+https://github.com/zkewal/pyslop@{rev} pyslop check --no-ty
-        language: system
-        types: [python]
-        pass_filenames: true
-"""
+    return (
+        "\n".join(
+            [
+                "  - repo: local",
+                "    hooks:",
+                "      - id: pyslop",
+                "        name: pyslop",
+                "        entry: uv tool run "
+                f"--from git+https://github.com/zkewal/pyslop@{rev} "
+                "pyslop check --no-ty",
+                "        language: system",
+                "        types: [python]",
+                "        pass_filenames: true",
+            ]
+        )
+        + "\n"
+    )
 
 
 def _workflow_text(rev: str) -> str:
@@ -261,14 +279,40 @@ jobs:
 """
 
 
+def _write_hook(base: Path, rev: str) -> None:
+    hook = base / ".pre-commit-config.yaml"
+    if hook.is_file():
+        existing = hook.read_text()
+        if "pyslop" in existing:
+            emit(f"pyslop: {hook} already present, skipping")
+        elif "repos:" in existing:
+            _append_block(hook, _pre_commit_entry(rev))
+            emit(f"pyslop: added hook to {hook}")
+        else:
+            emit(f"pyslop: {hook} has no repos:, skipping")
+    else:
+        hook.write_text("repos:\n" + _pre_commit_entry(rev))
+        emit(f"pyslop: wrote {hook}")
+
+
+def _write_workflow(base: Path, rev: str) -> None:
+    workflow = base / ".github" / "workflows" / "pyslop.yml"
+    if workflow.is_file():
+        emit(f"pyslop: {workflow} already present, skipping")
+    else:
+        workflow.parent.mkdir(parents=True, exist_ok=True)
+        workflow.write_text(_workflow_text(rev))
+        emit(f"pyslop: wrote {workflow}")
+
+
 def init_command(root: str) -> int:
     base = Path(root).resolve()
     vendored = base / "tools" / "pyslop" / "rules"
     if vendored.is_dir():
-        print(f"pyslop: {vendored} already present, skipping")
+        emit(f"pyslop: {vendored} already present, skipping")
     else:
         shutil.copytree(bundled_rules_dir(), vendored)
-        print(f"pyslop: vendored rules to {vendored}")
+        emit(f"pyslop: vendored rules to {vendored}")
     pyproject = base / "pyproject.toml"
     try:
         tool = (
@@ -277,7 +321,7 @@ def init_command(root: str) -> int:
             else {}
         )
     except tomllib.TOMLDecodeError as exc:
-        print(f"pyslop: cannot parse {pyproject}: {exc}", file=sys.stderr)
+        emit_error(f"pyslop: cannot parse {pyproject}: {exc}")
         return 2
     for key, block in (
         ("pyslop", PYSLOP_BLOCK),
@@ -285,31 +329,13 @@ def init_command(root: str) -> int:
         ("ty", _embed_toml(bundled_ty_config(), "tool.ty")),
     ):
         if key in tool:
-            print(f"pyslop: [tool.{key}] already present, skipping")
+            emit(f"pyslop: [tool.{key}] already present, skipping")
         else:
             _append_block(pyproject, block)
-            print(f"pyslop: added [tool.{key}] to {pyproject}")
+            emit(f"pyslop: added [tool.{key}] to {pyproject}")
     rev = _init_rev(base)
-    hook = base / ".pre-commit-config.yaml"
-    if hook.is_file():
-        existing = hook.read_text()
-        if "pyslop" in existing:
-            print(f"pyslop: {hook} already present, skipping")
-        elif "repos:" in existing:
-            _append_block(hook, _pre_commit_entry(rev))
-            print(f"pyslop: added hook to {hook}")
-        else:
-            print(f"pyslop: {hook} has no repos:, skipping")
-    else:
-        hook.write_text("repos:\n" + _pre_commit_entry(rev))
-        print(f"pyslop: wrote {hook}")
-    workflow = base / ".github" / "workflows" / "pyslop.yml"
-    if workflow.is_file():
-        print(f"pyslop: {workflow} already present, skipping")
-    else:
-        workflow.parent.mkdir(parents=True, exist_ok=True)
-        workflow.write_text(_workflow_text(rev))
-        print(f"pyslop: wrote {workflow}")
+    _write_hook(base, rev)
+    _write_workflow(base, rev)
     return 0
 
 
@@ -320,7 +346,7 @@ def has_reason_comment(lines: list[str], lineno: int) -> bool:
     return stripped.startswith("#") and bool(URL_RE.search(stripped))
 
 
-def deviation_finding(pyproject: Path, line: int, col: int, message: str) -> dict:
+def deviation_finding(pyproject: Path, line: int, col: int, message: str) -> Finding:
     return {
         "engine": "pyslop",
         "rule": DEVIATION_RULE,
@@ -353,7 +379,7 @@ def _scan_off_pairs(
     lineno: int,
     raw: str,
     kind: str,
-) -> list[dict]:
+) -> list[Finding]:
     """Flag unjustified disables inside `rules = { ... }` (any line of it).
 
     kind is "pyslop" (value "off" disables) or "ty" ("warn"/"ignore"
@@ -377,7 +403,94 @@ def _scan_off_pairs(
     return findings
 
 
-def check_pyproject_deviations(pyproject: Path) -> list[dict]:
+def _unknown_key_finding(pyproject: Path, lineno: int, raw: str, key: str) -> Finding:
+    return deviation_finding(
+        pyproject,
+        lineno,
+        _col(raw),
+        f'Unknown [tool.pyslop] key "{key}" '
+        '(only "rules" and "exclude" are supported).',
+    )
+
+
+def _section_status(
+    header: str, pyproject: Path, lineno: int, raw: str
+) -> tuple[str | None, list[Finding]]:
+    """Section for a normalized TOML header, plus an unknown-key finding."""
+    section = {
+        "[tool.pyslop]": "pyslop",
+        "[tool.pyslop.rules]": "pyslop-rules",
+        "[tool.ruff.lint.per-file-ignores]": "ruff-ignores",
+        "[[tool.ty.overrides]]": "ty-overrides",
+    }.get(header)
+    if section is not None:
+        return section, []
+    match = re.match(r"^\[tool\.pyslop\.([^]]+)\]$", header)
+    if match and match.group(1).split(".")[0] not in PYSLOP_KEYS:
+        return None, [_unknown_key_finding(pyproject, lineno, raw, match.group(1))]
+    return None, []
+
+
+def _pyslop_value_findings(
+    pyproject: Path, lines: list[str], lineno: int, raw: str, section: str
+) -> tuple[list[Finding], str | None]:
+    """(findings, pending) for [tool.pyslop] and [tool.pyslop.rules] lines."""
+    match = KEYVAL_RE.match(raw)
+    if match is None:
+        return [], None
+    key = _unquote(match.group("key"))
+    value = match.group("value")
+    pending_kind: str | None = None
+    out: list[Finding] = []
+    if section == "pyslop":
+        if key == "rules":
+            out = _scan_off_pairs(pyproject, lines, lineno, raw, "pyslop")
+            if value.count("{") - value.count("}") > 0:
+                pending_kind = "pyslop"
+        elif key.split(".")[0] not in PYSLOP_KEYS:
+            out = [_unknown_key_finding(pyproject, lineno, raw, key)]
+    elif OFF_VALUE_RE.match(value) and not has_reason_comment(lines, lineno):
+        out = [
+            deviation_finding(
+                pyproject,
+                lineno,
+                _col(raw),
+                f'Rule "{key}" is turned off without a reason.',
+            )
+        ]
+    return out, pending_kind
+
+
+def _tool_value_findings(
+    pyproject: Path, lines: list[str], lineno: int, raw: str, section: str
+) -> tuple[list[Finding], str | None]:
+    """(findings, pending) for per-file-ignores and ty override lines."""
+    match = KEYVAL_RE.match(raw)
+    if match is None:
+        return [], None
+    key = _unquote(match.group("key"))
+    value = match.group("value")
+    pending_kind: str | None = None
+    out: list[Finding] = []
+    if section == "ruff-ignores":
+        if not has_reason_comment(lines, lineno):
+            out = [
+                deviation_finding(
+                    pyproject,
+                    lineno,
+                    _col(raw),
+                    f'per-file-ignores entry for "{key}" '
+                    "needs a reason and an issue link.",
+                )
+            ]
+    elif section == "ty-overrides" and key == "rules":
+        out = _scan_off_pairs(pyproject, lines, lineno, raw, "ty")
+        if value.count("{") - value.count("}") > 0:
+            pending_kind = "ty"
+    return out, pending_kind
+
+
+def check_pyproject_deviations(pyproject: Path) -> list[Finding]:
     """Flag unjustified rule disables in one pyproject.toml (line-oriented).
 
     Sources: `[tool.pyslop.rules]` entries set to `"off"` (table or inline
@@ -391,7 +504,7 @@ def check_pyproject_deviations(pyproject: Path) -> list[dict]:
     except OSError:
         return []
     lines = text.splitlines()
-    findings: list[dict] = []
+    findings: list[Finding] = []
     section: str | None = None
     pending: str | None = None  # inside multiline `rules = { ... }`
     depth = 0
@@ -399,27 +512,8 @@ def check_pyproject_deviations(pyproject: Path) -> list[dict]:
         stripped = raw.strip()
         if stripped.startswith("["):
             header = re.sub(r"\s+", "", stripped).replace('"', "").replace("'", "")
-            if header == "[tool.pyslop]":
-                section = "pyslop"
-            elif header == "[tool.pyslop.rules]":
-                section = "pyslop-rules"
-            elif header == "[tool.ruff.lint.per-file-ignores]":
-                section = "ruff-ignores"
-            elif header == "[[tool.ty.overrides]]":
-                section = "ty-overrides"
-            else:
-                match = re.match(r"^\[tool\.pyslop\.([^]]+)\]$", header)
-                if match and match.group(1).split(".")[0] not in PYSLOP_KEYS:
-                    findings.append(
-                        deviation_finding(
-                            pyproject,
-                            lineno,
-                            _col(raw),
-                            f'Unknown [tool.pyslop] key "{match.group(1)}" '
-                            '(only "rules" and "exclude" are supported).',
-                        )
-                    )
-                section = None
+            section, header_findings = _section_status(header, pyproject, lineno, raw)
+            findings.extend(header_findings)
             pending = None
             continue
         if section is None:
@@ -430,80 +524,59 @@ def check_pyproject_deviations(pyproject: Path) -> list[dict]:
             if depth <= 0:
                 pending = None
             continue
-        match = KEYVAL_RE.match(raw)
-        if match is None:
-            continue
-        key = _unquote(match.group("key"))
-        value = match.group("value")
-        if section == "pyslop":
-            if key == "rules":
-                findings.extend(
-                    _scan_off_pairs(pyproject, lines, lineno, raw, "pyslop")
-                )
-                depth = value.count("{") - value.count("}")
-                if depth > 0:
-                    pending = "pyslop"
-            elif key.split(".")[0] not in PYSLOP_KEYS:
-                findings.append(
-                    deviation_finding(
-                        pyproject,
-                        lineno,
-                        _col(raw),
-                        f'Unknown [tool.pyslop] key "{key}" '
-                        '(only "rules" and "exclude" are supported).',
-                    )
-                )
-        elif section == "pyslop-rules":
-            if OFF_VALUE_RE.match(value) and not has_reason_comment(lines, lineno):
-                findings.append(
-                    deviation_finding(
-                        pyproject,
-                        lineno,
-                        _col(raw),
-                        f'Rule "{key}" is turned off without a reason.',
-                    )
-                )
-        elif section == "ruff-ignores":
-            if not has_reason_comment(lines, lineno):
-                findings.append(
-                    deviation_finding(
-                        pyproject,
-                        lineno,
-                        _col(raw),
-                        f'per-file-ignores entry for "{key}" '
-                        "needs a reason and an issue link.",
-                    )
-                )
-        elif section == "ty-overrides" and key == "rules":
-            findings.extend(_scan_off_pairs(pyproject, lines, lineno, raw, "ty"))
-            depth = value.count("{") - value.count("}")
-            if depth > 0:
-                pending = "ty"
+        if section in ("pyslop", "pyslop-rules"):
+            pair_findings, pending_kind = _pyslop_value_findings(
+                pyproject, lines, lineno, raw, section
+            )
+        else:
+            pair_findings, pending_kind = _tool_value_findings(
+                pyproject, lines, lineno, raw, section
+            )
+        findings.extend(pair_findings)
+        if pending_kind is not None:
+            pending = pending_kind
+            depth = raw.count("{") - raw.count("}")
     return findings
 
 
-def pyslop_table(pyproject: Path) -> dict:
-    """Parsed [tool.pyslop] table, or {} when absent/unreadable."""
+class PyslopConfig(TypedDict, total=False):
+    """Parsed [tool.pyslop] block: severity overrides and exclude globs."""
+
+    rules: dict[str, str]
+    exclude: list[str]
+
+
+def pyslop_table(pyproject: Path) -> PyslopConfig:
+    """Parsed [tool.pyslop] table, validated at the boundary, or {} when absent."""
     try:
         data = tomllib.loads(pyproject.read_text())
     except (OSError, tomllib.TOMLDecodeError):
         return {}
-    table = data.get("tool", {}).get("pyslop", {})
-    return table if isinstance(table, dict) else {}
+    tool = data.get("tool", {})
+    table = tool.get("pyslop", {}) if isinstance(tool, dict) else {}
+    if not isinstance(table, dict):
+        return {}
+    out: PyslopConfig = {}
+    rules = table.get("rules")
+    if isinstance(rules, dict):
+        out["rules"] = {str(key): str(value) for key, value in rules.items()}
+    exclude = table.get("exclude")
+    if isinstance(exclude, list):
+        out["exclude"] = [e for e in exclude if isinstance(e, str)]
+    return out
 
 
-def apply_pyslop_config(findings: list[dict]) -> list[dict]:
+def apply_pyslop_config(findings: list[Finding]) -> list[Finding]:
     """Apply [tool.pyslop] rules severities (ast-grep only) and excludes."""
-    cache: dict[Path | None, tuple[dict, list]] = {}
+    cache: dict[Path | None, tuple[dict[str, str], list[str]]] = {}
     kept = []
     for finding in findings:
         path = Path(finding["file"])
         project = nearest_pyproject(path)
         if project not in cache:
             table = pyslop_table(project) if project is not None else {}
-            rules = table.get("rules", {})
             cache[project] = (
-                rules if isinstance(rules, dict) else {},
+                table.get("rules", {}),
                 pyslop_excludes(project) if project is not None else [],
             )
         rules, exclude = cache[project]
@@ -518,12 +591,12 @@ def apply_pyslop_config(findings: list[dict]) -> list[dict]:
         if project is not None and exclude:
             base = project.parent.resolve()
             absolute = path if path.is_absolute() else Path.cwd() / path
-            try:
-                rel = absolute.resolve().relative_to(base)
-            except ValueError:
-                rel = None
-            if rel is not None and any(
-                isinstance(pat, str) and PurePath(str(rel)).match(pat)
+            rel = absolute.resolve()
+            if not rel.is_relative_to(base):
+                kept.append(finding)
+                continue
+            if any(
+                isinstance(pat, str) and PurePath(str(rel.relative_to(base))).match(pat)
                 for pat in exclude
             ):
                 continue
@@ -538,7 +611,7 @@ def format_command(paths: list[str]) -> int:
     return subprocess.run([binary, "format", *paths], check=False).returncode
 
 
-def print_text(findings: list[dict]) -> None:
+def print_text(findings: list[Finding]) -> None:
     """One line per finding grouped by file, plus a summary. No color unless a TTY."""
     ordered = sorted(
         findings,
@@ -549,74 +622,92 @@ def print_text(findings: list[dict]) -> None:
         loc = f"{finding['file']}:{finding['line']}:{finding['col']}"
         if color:
             loc = f"\x1b[1m{loc}\x1b[0m"
-        print(f"{loc} {finding['engine']}/{finding['rule']} {finding['message']}")
+        emit(f"{loc} {finding['engine']}/{finding['rule']} {finding['message']}")
     total = len(ordered)
     errors = sum(1 for finding in ordered if finding["severity"] == "error")
-    print(
+    emit(
         f"{total} finding{'s' if total != 1 else ''} "
         f"({errors} error{'s' if errors != 1 else ''})"
     )
 
 
+def run_ast_grep(paths: list[str]) -> tuple[list[Finding], int]:
+    """Run ast-grep scan with SAFETY filtering. Returns (findings, fatal_exit)."""
+    binary = require_binary("ast-grep")
+    if binary is None:
+        return [], 2
+    rules_dir = discover_rules_dir(paths)
+    proc = subprocess.run(
+        [
+            binary,
+            "scan",
+            "--config",
+            str(rules_dir / "sgconfig.yml"),
+            "--json",
+            *paths,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    try:
+        raw = json.loads(proc.stdout if proc.stdout.strip() else "[]")
+    except json.JSONDecodeError:
+        emit_error(f"pyslop: could not parse ast-grep output:\n{proc.stderr}")
+        return [], 2
+    sources: dict[str, list[str]] = {}
+    findings: list[Finding] = []
+    for item in raw:
+        rule = item.get("ruleId", "")
+        line = item["range"]["start"]["line"] + 1
+        col = item["range"]["start"]["column"] + 1
+        file = item.get("file", "")
+        if rule == SAFETY_RULE:
+            if file not in sources:
+                sources[file] = Path(file).read_text().splitlines()
+            if has_safety(sources[file], line):
+                continue
+        findings.append(
+            {
+                "engine": "ast-grep",
+                "rule": rule,
+                "file": file,
+                "line": line,
+                "col": col,
+                "message": item.get("message") or "",
+                "fix_hint": item.get("note") or "",
+                "severity": item.get("severity") or "error",
+            }
+        )
+    return findings, 0
+
+
+def _deviation_projects(paths: list[str]) -> list[Path]:
+    """Deduped nearest pyprojects for the checked paths."""
+    seen: list[Path] = []
+    for raw_path in paths:
+        candidate = nearest_pyproject(Path(raw_path))
+        if candidate is not None and candidate not in seen:
+            seen.append(candidate)
+    return seen
+
+
 def check_command(
     paths: list[str],
     format: str,
+    *,
     fix: bool,
     no_ty: bool,
     only: str | None = None,
 ) -> int:
-    findings: list[dict] = []
+    findings: list[Finding] = []
     if only in (None, "ast-grep"):
-        binary = require_binary("ast-grep")
-        if binary is None:
-            return 2
-        rules_dir = discover_rules_dir(paths)
-        proc = subprocess.run(
-            [
-                binary,
-                "scan",
-                "--config",
-                str(rules_dir / "sgconfig.yml"),
-                "--json",
-                *paths,
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        try:
-            raw = json.loads(proc.stdout if proc.stdout.strip() else "[]")
-        except json.JSONDecodeError:
-            print(
-                f"pyslop: could not parse ast-grep output:\n{proc.stderr}",
-                file=sys.stderr,
-            )
-            return 2
-        sources: dict[str, list[str]] = {}
-        for item in raw:
-            rule = item.get("ruleId", "")
-            line = item["range"]["start"]["line"] + 1
-            col = item["range"]["start"]["column"] + 1
-            file = item.get("file", "")
-            if rule == SAFETY_RULE:
-                if file not in sources:
-                    sources[file] = Path(file).read_text().splitlines()
-                if has_safety(sources[file], line):
-                    continue
-            findings.append(
-                {
-                    "engine": "ast-grep",
-                    "rule": rule,
-                    "file": file,
-                    "line": line,
-                    "col": col,
-                    "message": item.get("message") or "",
-                    "fix_hint": item.get("note") or "",
-                    "severity": item.get("severity") or "error",
-                }
-            )
+        grep_findings, fatal = run_ast_grep(paths)
+        if fatal:
+            return fatal
+        findings.extend(grep_findings)
     if only in (None, "ruff"):
-        ruff_findings, fatal = run_ruff(paths, fix)
+        ruff_findings, fatal = run_ruff(paths, fix=fix)
         if fatal:
             return fatal
         findings.extend(ruff_findings)
@@ -626,16 +717,11 @@ def check_command(
             return 2
         findings.extend(ty_findings)
     if only in (None, "pyslop"):
-        seen: list[Path] = []
-        for raw_path in paths:
-            candidate = nearest_pyproject(Path(raw_path))
-            if candidate is not None and candidate not in seen:
-                seen.append(candidate)
-        for pyproject in seen:
+        for pyproject in _deviation_projects(paths):
             findings.extend(check_pyproject_deviations(pyproject))
     findings = apply_pyslop_config(findings)
     if format == "json":
-        print(json.dumps(findings, indent=2))
+        emit(json.dumps(findings, indent=2))
     else:
         print_text(findings)
     return 1 if any(f["severity"] == "error" for f in findings) else 0
@@ -689,9 +775,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "check":
-        return check_command(args.paths, args.format, args.fix, args.no_ty, args.only)
+        return check_command(
+            args.paths, args.format, fix=args.fix, no_ty=args.no_ty, only=args.only
+        )
     if args.command == "format":
         return format_command(args.paths)
     if args.command == "init":
         return init_command(args.path)
-    raise AssertionError(f"unknown command {args.command}")
+    raise AssertionError(args.command)  # unreachable, command is required
