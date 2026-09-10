@@ -1,0 +1,7 @@
+id: pyslop/fixture-marker
+language: python
+severity: error
+rule:
+  pattern: MONOREPO_SLOP
+message: Fixture marker for monorepo discovery test.
+note: Test-only rule vendored in the monorepo fixture.
