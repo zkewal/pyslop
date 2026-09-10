@@ -1,0 +1,22 @@
+# Fixture test for pyslop/require-safety-comment.
+# Note: the raw rule flags every escape hatch, including ones carrying a
+# `# SAFETY:` comment. The SAFETY exemption (same or preceding line) is
+# applied by the pyslop runner, covered by tests/test_check.py, not here.
+id: pyslop/require-safety-comment
+valid:
+  - |
+    x = 1
+  - |
+    from typing import Any
+    x: int = 1
+invalid:
+  - |
+    from typing import cast
+    x = cast(int, "1")
+  - |
+    from typing import Any
+    x: Any = 1
+  - |
+    x = 1  # type: ignore[assignment]
+  - |
+    x = 1  # ty: ignore[invalid-assignment]

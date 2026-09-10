@@ -1,0 +1,4 @@
+ruleDirs:
+  - pyslop
+testConfigs:
+  - testDir: __tests__
