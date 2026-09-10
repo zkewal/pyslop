@@ -1,0 +1,17 @@
+id: pyslop/require-safety-comment
+language: python
+severity: error
+rule:
+  any:
+    - pattern: cast($T, $V)
+    - pattern: typing.cast($T, $V)
+    - pattern: Any
+      not:
+        inside:
+          kind: import_from_statement
+          stopBy: end
+    - pattern: typing.Any
+    - kind: comment
+      regex: "#\\s*(type|ty)\\s*:\\s*ignore"
+message: Escape hatch without a SAFETY justification.
+note: "Add `# SAFETY: <reason>` on the same or the immediately preceding line, or remove the escape hatch."

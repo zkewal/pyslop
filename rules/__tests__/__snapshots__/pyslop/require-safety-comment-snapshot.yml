@@ -1,0 +1,32 @@
+id: pyslop/require-safety-comment
+snapshots:
+  ? |
+    from typing import Any
+    x: Any = 1
+  : labels:
+    - source: Any
+      style: primary
+      start: 26
+      end: 29
+  ? |
+    from typing import cast
+    x = cast(int, "1")
+  : labels:
+    - source: cast(int, "1")
+      style: primary
+      start: 28
+      end: 42
+  ? |
+    x = 1  # ty: ignore[invalid-assignment]
+  : labels:
+    - source: '# ty: ignore[invalid-assignment]'
+      style: primary
+      start: 7
+      end: 39
+  ? |
+    x = 1  # type: ignore[assignment]
+  : labels:
+    - source: '# type: ignore[assignment]'
+      style: primary
+      start: 7
+      end: 33
