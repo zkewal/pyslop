@@ -1,0 +1,7 @@
+name: custom-pyslop
+on: [push]
+jobs:
+  custom:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo custom
