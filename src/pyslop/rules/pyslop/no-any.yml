@@ -1,0 +1,13 @@
+id: pyslop/no-any
+language: python
+severity: error
+rule:
+  any:
+    - pattern: Any
+      not:
+        inside:
+          kind: import_from_statement
+          stopBy: end
+    - pattern: typing.Any
+message: Explicit Any without a SAFETY justification.
+note: "Add `# SAFETY: <reason>` on the same or the immediately preceding line, or replace Any with a concrete type."

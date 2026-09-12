@@ -1,0 +1,18 @@
+# Fixture test for pyslop/no-any.
+# Imports are allowed; explicit uses of Any are not.
+id: pyslop/no-any
+valid:
+  - |
+    from typing import Any
+    x: int = 1
+  - |
+    import typing
+    x: int = 1
+invalid:
+  - |
+    from typing import Any
+    x: Any = 1
+  - |
+    import typing
+    def load() -> typing.Any:
+        return 1

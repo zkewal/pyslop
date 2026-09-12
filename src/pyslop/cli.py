@@ -16,7 +16,12 @@ from typing import Any, TypedDict
 
 import pathspec
 
-SAFETY_RULE = "pyslop/require-safety-comment"
+SAFETY_RULES = frozenset(
+    {
+        "pyslop/require-safety-comment",
+        "pyslop/no-any",
+    }
+)
 SAFETY_RE = re.compile(r"#\s*SAFETY\s*:\s*\S")
 DEVIATION_RULE = "pyslop/deviation-needs-reason"
 URL_RE = re.compile(r"https?://\S")
@@ -822,7 +827,7 @@ def _grep_finding(item: object, sources: dict[str, list[str]]) -> Finding | None
     if not isinstance(rule, str) or not isinstance(file, str):
         detail = f"finding id/file is not text: {_preview(item)}"
         raise _GrepOutputError(detail)
-    if rule == SAFETY_RULE:
+    if rule in SAFETY_RULES:
         if file not in sources:
             try:
                 sources[file] = Path(file).read_text().splitlines()

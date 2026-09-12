@@ -17,7 +17,7 @@ ast-grep. Families selected:
 - **B** (flake8-bugbear): likely bugs (mutable defaults, unused loop vars).
 - **ANN** (flake8-annotations): annotations required everywhere. Includes
   **ANN401**, which bans `Any` in annotations — the ruff side of the evidence
-  rules; `pyslop/require-safety-comment` covers the rest.
+  rules; `pyslop/no-any` independently requires SAFETY for explicit `Any`.
 - **BLE** (flake8-blind-except): no blind `except Exception` / bare `except`.
 - **TRY** (tryceratops): `raise` without `from`, verbose logging in handlers.
 - **S110, S112** (flake8-bandit): `try/except/pass` and `try/except/continue`

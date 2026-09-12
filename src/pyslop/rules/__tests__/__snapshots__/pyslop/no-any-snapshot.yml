@@ -1,0 +1,19 @@
+id: pyslop/no-any
+snapshots:
+  ? |
+    from typing import Any
+    x: Any = 1
+  : labels:
+    - source: Any
+      style: primary
+      start: 26
+      end: 29
+  ? |
+    import typing
+    def load() -> typing.Any:
+        return 1
+  : labels:
+    - source: typing.Any
+      style: primary
+      start: 28
+      end: 38

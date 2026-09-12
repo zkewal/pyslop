@@ -9,7 +9,7 @@ from pyslop.cli import main
 FIXTURES = Path(__file__).parent / "fixtures" / "ruff"
 
 
-def test_any_arg_yields_ruff_ann401_alongside_safety_finding(
+def test_any_arg_yields_ruff_ann401_alongside_no_any_finding(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     code = main(
@@ -35,8 +35,7 @@ def test_any_arg_yields_ruff_ann401_alongside_safety_finding(
     findings = json.loads(capsys.readouterr().out)
     assert code == 1
     assert any(
-        f["engine"] == "ast-grep" and f["rule"] == "pyslop/require-safety-comment"
-        for f in findings
+        f["engine"] == "ast-grep" and f["rule"] == "pyslop/no-any" for f in findings
     )
 
 
