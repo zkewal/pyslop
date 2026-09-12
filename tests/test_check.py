@@ -21,7 +21,7 @@ def test_bad_file_lists_one_finding_per_unjustified_hatch(
         if f["rule"] == "pyslop/require-safety-comment"
     ]
     assert code == 1
-    assert sorted(f["line"] for f in findings) == [3, 4, 5, 6, 7, 10]
+    assert sorted(f["line"] for f in findings) == [3, 5, 6, 7, 10]
     for finding in findings:
         assert finding["engine"] == "ast-grep"
         assert finding["rule"] == "pyslop/require-safety-comment"
@@ -29,6 +29,24 @@ def test_bad_file_lists_one_finding_per_unjustified_hatch(
         assert finding["severity"] == "error"
         assert finding["message"]
         assert finding["fix_hint"]
+
+
+def test_any_is_reported_by_its_separate_rule(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code = main(
+        ["check", str(FIXTURES / "bad.py"), "--format", "json", "--only", "ast-grep"]
+    )
+    findings = [
+        f for f in json.loads(capsys.readouterr().out) if f["rule"] == "pyslop/no-any"
+    ]
+    assert code == 1
+    assert sorted(f["line"] for f in findings) == [4]
+    finding = findings[0]
+    assert finding["engine"] == "ast-grep"
+    assert finding["severity"] == "error"
+    assert finding["message"]
+    assert finding["fix_hint"]
 
 
 def test_good_file_exits_zero_with_empty_list(
@@ -47,6 +65,23 @@ def test_good_file_exits_zero_with_empty_list(
     findings = json.loads(capsys.readouterr().out)
     assert code == 0
     assert findings == []
+
+
+def test_safety_filter_is_independent_for_rule_ids(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = tmp_path / "mixed.py"
+    target.write_text(
+        "from typing import Any, cast\n"
+        'value = cast(int, "1")\n'
+        "payload: Any = 1  # SAFETY: validated dynamic boundary\n"
+    )
+    code = main(["check", str(target), "--format", "json", "--only", "ast-grep"])
+    findings = json.loads(capsys.readouterr().out)
+    assert code == 1
+    assert [(f["rule"], f["line"]) for f in findings] == [
+        ("pyslop/require-safety-comment", 2)
+    ]
 
 
 def test_broken_rules_config_fails_closed_not_green(

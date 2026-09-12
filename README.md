@@ -13,7 +13,7 @@ pyslop makes each of those an error unless it carries a `# SAFETY: <reason>` com
 Install a pinned tag with `uv`; nothing else to set up:
 
 ```bash
-uv tool run --from git+https://github.com/zkewal/pyslop@v0.1.4 pyslop --version
+uvx --from git+https://github.com/zkewal/pyslop@v0.1.5 pyslop --version
 ```
 
 Engine versions are pinned exactly (`==` in `pyproject.toml`), so a tag
@@ -48,7 +48,8 @@ ruff carries what it already has ([shipped config](docs/config/ruff.md), ty runs
 
 | Rule | What it flags |
 | ---- | ------------- |
-| `pyslop/require-safety-comment` | `cast()`, `type:`/`ty: ignore`, explicit `Any` without `# SAFETY: <reason>` |
+| `pyslop/require-safety-comment` | `cast()`, `type:`/`ty: ignore` without `# SAFETY: <reason>` |
+| `pyslop/no-any` | Explicit `Any` without `# SAFETY: <reason>` |
 | `pyslop/no-blanket-ignore` | bare `type:`/`ty: ignore` without a code |
 | `pyslop/swallowed-exception` | `except` handlers that neither raise nor return |
 | `pyslop/no-isinstance-ladder` | 3+ `isinstance` branches on one value in one function |

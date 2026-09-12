@@ -1,14 +1,6 @@
 id: pyslop/require-safety-comment
 snapshots:
   ? |
-    from typing import Any
-    x: Any = 1
-  : labels:
-    - source: Any
-      style: primary
-      start: 26
-      end: 29
-  ? |
     from typing import cast
     x = cast(int, "1")
   : labels:
