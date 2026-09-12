@@ -3,5 +3,5 @@ name = "per-file-ignore-good"
 version = "0.1.0"
 
 [tool.ruff.lint.per-file-ignores]
-# legacy bridge, remove in https://linear.app/x/DEX-1
+# legacy bridge, remove in https://github.com/org/repo/issues/1
 "tests/**" = ["S101"]

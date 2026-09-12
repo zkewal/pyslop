@@ -46,8 +46,8 @@ patch(fake_client)
   trailing `, $$$` requires a comma; single-arg and multi-arg string calls
   would otherwise not both match. The same split applies to `$M.patch` and
   `monkeypatch.setattr`.
-- dex-ios deviation pattern for legacy suites: older dex-ios test targets
-  mock dozens of module paths by string and cannot migrate in one PR. For
+- Deviation pattern for legacy suites: an older test tree that mocks dozens
+  of module paths by string cannot migrate in one PR. For
   those targets, add a `[tool.pyslop.rules]` override disabling
   `pyslop/no-module-mocking` for the legacy test path, with a reason and an
   issue link per the deviation rule, then migrate one test file per PR.

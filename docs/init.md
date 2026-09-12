@@ -15,7 +15,6 @@
    `uv tool run --from git+https://github.com/zkewal/pyslop@<rev> pyslop`,
    where `<rev>` is the installed pyslop release (`v<version>`), else `main`
    when pyslop is not installed. It is never the consumer repo's own tag.
-   pyslop is private: the runner needs read access (a fine-grained PAT).
 
 Existing keys are never overwritten: anything already present (a custom
 `[tool.ruff]`, an existing hook or workflow) is reported and skipped, and
