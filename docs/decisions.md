@@ -8,7 +8,7 @@ Design record: `~/Desktop/ho-repos/research-notes/python-anti-slop-toolkit-2026-
 - Type checker is ty. A consumer's mypy is untouched and runs as its own step.
 - No baseline file. Existing violations are handled with per-path deviations carrying an issue link, removed one rule per PR.
 - Autofix only for safe ruff rewrites. Never evidence rules.
-- Private repo, git-tag versions, installed via `uv tool run --from git+https://github.com/zkewal/pyslop@<tag> pyslop`.
+- Public repo, git-tag versions, installed via `uv tool run --from git+https://github.com/zkewal/pyslop@<tag> pyslop`.
 - Adoption correctness (v0.1.1): engines fail closed — an ast-grep crash,
   an empty/malformed payload (including rc 1 with `[]`), or ty
   diagnostics that do not parse are exit 2, never a silent green.

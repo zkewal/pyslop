@@ -44,13 +44,13 @@ One finding pointing at the entry line: silenced with no reason on record.
 
 ```toml
 [tool.ruff.lint.per-file-ignores]
-# legacy bridge, remove in https://linear.app/x/DEX-1
+# legacy bridge, remove in https://github.com/org/repo/issues/1
 "tests/**" = ["S101"]
 ```
 
 ```toml
 [tool.pyslop]
-# legacy bridge for old tests: https://linear.app/x/DEX-2
+# legacy bridge for old tests: https://github.com/org/repo/issues/2
 rules = { "pyslop/no-module-mocking" = "off" }
 ```
 

@@ -3,5 +3,5 @@ name = "rules-off"
 version = "0.1.0"
 
 [tool.pyslop]
-# legacy bridge for old tests: https://linear.app/x/DEX-2
+# legacy bridge for old tests: https://github.com/org/repo/issues/2
 rules = { "pyslop/no-module-mocking" = "off" }

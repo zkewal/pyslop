@@ -318,7 +318,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      # Private repo: the runner needs read access (a fine-grained PAT).
       - name: Check for slop
         run: uv tool run --from git+https://github.com/zkewal/pyslop@{rev} pyslop check
 """

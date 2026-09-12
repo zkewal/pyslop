@@ -4,5 +4,5 @@ version = "0.1.0"
 
 [[tool.ty.overrides]]
 include = ["gen/**"]
-# generated stubs lack sources: https://linear.app/x/DEX-4
+# generated stubs lack sources: https://github.com/org/repo/issues/4
 rules = { "unresolved-import" = "ignore" }

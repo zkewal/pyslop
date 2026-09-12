@@ -9,11 +9,8 @@ The repo must have `uv` and a Python >= 3.12. pyslop itself is invoked
 without installing anything:
 
 ```bash
-uv tool run --from git+https://github.com/zkewal/pyslop@v0.1.0 pyslop init
+uv tool run --from git+https://github.com/zkewal/pyslop@v0.1.4 pyslop init
 ```
-
-(The repo is private: CI and fresh machines need a read token. See the
-pyslop README.)
 
 Then follow these steps exactly:
 

@@ -10,11 +10,10 @@ pyslop makes each of those an error unless it carries a `# SAFETY: <reason>` com
 
 ## Install
 
-This is a private repo. Install a pinned tag with `uv` (CI and fresh machines need a
-GitHub read token for the repo):
+Install a pinned tag with `uv`; nothing else to set up:
 
 ```bash
-uv tool run --from git+https://github.com/zkewal/pyslop@v0.1.1 pyslop --version
+uv tool run --from git+https://github.com/zkewal/pyslop@v0.1.4 pyslop --version
 ```
 
 Engine versions are pinned exactly (`==` in `pyproject.toml`), so a tag
