@@ -704,6 +704,95 @@ def print_text(findings: list[Finding]) -> None:
     )
 
 
+def _escape_github_data(text: str) -> str:
+    """Escape a workflow-command message: percent, CR, LF (percent first)."""
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def _escape_github_property(text: str) -> str:
+    """Escape a workflow-command property: data escapes plus colon, comma."""
+    escaped = _escape_github_data(text)
+    return escaped.replace(":", "%3A").replace(",", "%2C")
+
+
+def print_github(findings: list[Finding]) -> None:
+    """One GitHub workflow command per finding, sorted exactly like text.
+
+    `error` for error severity, `warning` for anything else. No summary line:
+    a summary is not a workflow command; the exit code carries the signal.
+    """
+    ordered = sorted(
+        findings,
+        key=lambda f: (f["file"], f["line"], f["col"], f["engine"], f["rule"]),
+    )
+    for finding in ordered:
+        command = "error" if finding["severity"] == "error" else "warning"
+        file = _escape_github_property(str(finding["file"]))
+        line = _escape_github_property(str(finding["line"]))
+        col = _escape_github_property(str(finding["col"]))
+        title = _escape_github_property(f"{finding['engine']} ({finding['rule']})")
+        message = _escape_github_data(str(finding["message"]))
+        emit(f"::{command} file={file},line={line},col={col},title={title}::{message}")
+
+
+def _findings_exit(findings: list[Finding]) -> int:
+    """Shared exit rule: 1 when any finding is error severity, else 0."""
+    return 1 if any(f["severity"] == "error" for f in findings) else 0
+
+
+class _RenderInputError(Exception):
+    """Findings JSON on stdin is unusable: fail closed, never partial."""
+
+
+def _render_finding(item: object, index: int) -> Finding:
+    """One validated finding from a decoded JSON list, else _RenderInputError."""
+    if not isinstance(item, dict):
+        detail = f"finding {index} is not an object"
+        raise _RenderInputError(detail)
+    for key in ("engine", "rule", "file", "message", "severity"):
+        if not isinstance(item.get(key), str):
+            detail = f"finding {index} has no text field {key!r}"
+            raise _RenderInputError(detail)
+    line = item.get("line")
+    col = item.get("col")
+    if isinstance(line, bool) or isinstance(col, bool):
+        detail = f"finding {index} has no integer line/col"
+        raise _RenderInputError(detail)
+    if not isinstance(line, int) or not isinstance(col, int):
+        detail = f"finding {index} has no integer line/col"
+        raise _RenderInputError(detail)
+    return item
+
+
+def _read_render_findings(raw: str) -> list[Finding]:
+    """Parse and validate one findings JSON array, else _RenderInputError."""
+    try:
+        data: object = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        detail = f"invalid JSON: {exc}"
+        raise _RenderInputError(detail) from exc
+    if not isinstance(data, list):
+        detail = "top level is not a JSON list"
+        raise _RenderInputError(detail)
+    return [_render_finding(item, index) for index, item in enumerate(data)]
+
+
+def render_command(format: str) -> int:
+    """Render findings JSON piped on stdin. Shares check's exit rule."""
+    try:
+        findings = _read_render_findings(sys.stdin.read())
+    except _RenderInputError as exc:
+        emit_error(f"pyslop: render: {exc}; refusing partial results.")
+        return 2
+    if format == "json":
+        emit(json.dumps(findings, indent=2))
+    elif format == "github":
+        print_github(findings)
+    else:
+        print_text(findings)
+    return _findings_exit(findings)
+
+
 class _GrepOutputError(Exception):
     """Malformed engine output or unreadable source: fail closed, never partial."""
 
@@ -837,6 +926,32 @@ def _deviation_projects(paths: list[str]) -> list[Path]:
     return seen
 
 
+def _run_engines(
+    paths: list[str], *, fix: bool, no_ty: bool, only: str | None
+) -> tuple[list[Finding], int]:
+    """Run the selected engines. Returns (findings, fatal_exit)."""
+    findings: list[Finding] = []
+    if only in (None, "ast-grep"):
+        grep_findings, fatal = run_ast_grep(paths)
+        if fatal:
+            return findings, fatal
+        findings.extend(grep_findings)
+    if only in (None, "ruff"):
+        ruff_findings, fatal = run_ruff(paths, fix=fix)
+        if fatal:
+            return findings, fatal
+        findings.extend(ruff_findings)
+    if only in (None, "ty") and not no_ty:
+        ty_findings = run_ty(paths)
+        if ty_findings is None:
+            return findings, 2
+        findings.extend(ty_findings)
+    if only in (None, "pyslop"):
+        for pyproject in _deviation_projects(paths):
+            findings.extend(check_pyproject_deviations(pyproject))
+    return findings, 0
+
+
 def check_command(
     paths: list[str],
     format: str,
@@ -845,31 +960,17 @@ def check_command(
     no_ty: bool,
     only: str | None = None,
 ) -> int:
-    findings: list[Finding] = []
-    if only in (None, "ast-grep"):
-        grep_findings, fatal = run_ast_grep(paths)
-        if fatal:
-            return fatal
-        findings.extend(grep_findings)
-    if only in (None, "ruff"):
-        ruff_findings, fatal = run_ruff(paths, fix=fix)
-        if fatal:
-            return fatal
-        findings.extend(ruff_findings)
-    if only in (None, "ty") and not no_ty:
-        ty_findings = run_ty(paths)
-        if ty_findings is None:
-            return 2
-        findings.extend(ty_findings)
-    if only in (None, "pyslop"):
-        for pyproject in _deviation_projects(paths):
-            findings.extend(check_pyproject_deviations(pyproject))
+    findings, fatal = _run_engines(paths, fix=fix, no_ty=no_ty, only=only)
+    if fatal:
+        return fatal
     findings = apply_pyslop_config(findings)
     if format == "json":
         emit(json.dumps(findings, indent=2))
+    elif format == "github":
+        print_github(findings)
     else:
         print_text(findings)
-    return 1 if any(f["severity"] == "error" for f in findings) else 0
+    return _findings_exit(findings)
 
 
 def _pyslop_version() -> str:
@@ -891,7 +992,7 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument(
         "paths", nargs="*", default=["."], help="Files or dirs (default: .)."
     )
-    check.add_argument("--format", choices=["text", "json"], default="text")
+    check.add_argument("--format", choices=["text", "json", "github"], default="text")
     check.add_argument(
         "--no-ty", action="store_true", help="Skip ty (pre-commit speed)."
     )
@@ -910,6 +1011,8 @@ def build_parser() -> argparse.ArgumentParser:
     format_cmd.add_argument(
         "paths", nargs="*", default=["."], help="Files or dirs (default: .)."
     )
+    render = sub.add_parser("render", help="Render findings JSON piped on stdin.")
+    render.add_argument("--format", choices=["text", "json", "github"], default="text")
     init_cmd = sub.add_parser("init", help="Vendor rules and write configs.")
     init_cmd.add_argument(
         "path", nargs="?", default=".", help="Repo root (default: .)."
@@ -925,6 +1028,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.command == "format":
         return format_command(args.paths)
+    if args.command == "render":
+        return render_command(args.format)
     if args.command == "init":
         return init_command(args.path)
     raise AssertionError(args.command)  # unreachable, command is required
