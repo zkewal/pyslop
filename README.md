@@ -30,11 +30,17 @@ pyslop check --format json          # whole project
 pyslop check src tests/test_*.py    # only these paths (pre-commit stays fast)
 pyslop check --fix                  # safe ruff rewrites only, never evidence rules
 pyslop check --only ruff            # one engine: ast-grep | ruff | ty | pyslop
+pyslop check --format github        # GitHub workflow commands (::error/::warning)
+pyslop render --format github       # render findings JSON piped on stdin
 pyslop format                       # ruff format
 pyslop init                         # vendor rules + configs into a repo (see skills/install-pyslop)
 ```
 
 Exit code is 1 when any error-severity finding exists, 0 otherwise.
+`pyslop render` reads one findings JSON array from stdin and renders it with
+the same formats and exit rule; `--format github` emits one `::error` or
+`::warning` workflow command per finding (actions/toolkit escaping, stable
+sort, no summary line).
 
 ## Rules
 
