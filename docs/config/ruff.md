@@ -15,12 +15,14 @@ ast-grep. Families selected:
 - **UP** (pyupgrade): modern syntax for the floor version (`X | None`, `match`
   idioms). Old idioms invite untyped patterns.
 - **B** (flake8-bugbear): likely bugs (mutable defaults, unused loop vars).
-- **ANN401** only (flake8-annotations): bans `Any` in annotations — the ruff
-  side of the evidence rules; `pyslop/no-any` independently requires SAFETY
-  for explicit `Any`. The rest of `ANN` (missing annotations) is *not*
-  selected: an unannotated legacy function is debt, not slop, and enabling it
-  on a real codebase produced thousands of findings that said nothing about
-  evidence.
+- **ANN** (flake8-annotations): every parameter and return annotated. This is
+  Python's `noImplicitAny`: TypeScript repos get it from the compiler, Python
+  has no type checker default that requires it, so ruff carries it. An
+  unannotated parameter is *no evidence*, which is exactly what pyslop is
+  about. Includes **ANN401**, which bans `Any`; `pyslop/no-any` independently
+  requires SAFETY for explicit `Any`. A legacy adopter that cannot afford
+  annotations yet leaves `ANN0`/`ANN2` out of its *own* `select` with a reason
+  and an issue link; the shipped default stays strict.
 - **BLE** (flake8-blind-except): no blind `except Exception` / bare `except`.
 - **TRY** (tryceratops) minus **TRY003**: `raise` without `from`, verbose
   logging in handlers. TRY003 (long message inside `raise`) is style and is
@@ -49,7 +51,7 @@ ast-grep. Families selected:
 - **FIX** (flake8-fixme): same as TD for `FIXME`/`XXX`/`HACK`.
 
 Deliberately **not** selected: `D` (docstring presence and shape is a per-repo
-style rollout, not slop), `ANN0xx`/`ANN2xx`, `TRY003`. Consumers who want them
-add them to their own `[tool.ruff.lint] select`. Removed in v0.1.6 after the
-first adoption showed these three families accounted for most findings while
-carrying no evidence signal.
+style rollout, not slop) and `TRY003` (exception-message style). Consumers who
+want them add them to their own `[tool.ruff.lint] select`. Removed in v0.1.6
+because neither speaks to type evidence. v0.1.6 also dropped `ANN0`/`ANN2`;
+v0.1.7 restored them, see the ANN entry above for why.
