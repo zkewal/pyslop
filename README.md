@@ -13,7 +13,7 @@ pyslop makes each of those an error unless it carries a `# SAFETY: <reason>` com
 Install a pinned tag with `uv`; nothing else to set up:
 
 ```bash
-uvx --from git+https://github.com/zkewal/pyslop@v0.1.5 pyslop --version
+uvx --from git+https://github.com/zkewal/pyslop@v0.1.6 pyslop --version
 ```
 
 Engine versions are pinned exactly (`==` in `pyproject.toml`), so a tag

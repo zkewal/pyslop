@@ -5,9 +5,9 @@ target-version = "py312"
 preview = false
 
 [lint]
-# D203/D213 are already dropped by ruff in favour of D211/D212; listing them
-# silences the incompatible-pair warning on every run. No behaviour change.
-ignore = ["D203", "D213"]
+# TRY003 (message text inside `raise`) is exception *style*, not evidence;
+# it dominated real adoptions with four-digit counts. Consumers may re-enable.
+ignore = ["TRY003"]
 select = [
   "E",
   "F",
@@ -15,7 +15,7 @@ select = [
   "I",
   "UP",
   "B",
-  "ANN",
+  "ANN401",
   "BLE",
   "TRY",
   "S110",
@@ -35,5 +35,4 @@ select = [
   "T20",
   "TD",
   "FIX",
-  "D2",
 ]
