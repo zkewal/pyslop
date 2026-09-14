@@ -15,7 +15,7 @@ select = [
   "I",
   "UP",
   "B",
-  "ANN401",
+  "ANN",
   "BLE",
   "TRY",
   "S110",

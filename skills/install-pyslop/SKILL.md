@@ -9,7 +9,7 @@ The repo must have `uv` and a Python >= 3.12. pyslop itself is invoked
 without installing anything:
 
 ```bash
-uvx --from git+https://github.com/zkewal/pyslop@v0.1.6 pyslop init
+uvx --from git+https://github.com/zkewal/pyslop@v0.1.7 pyslop init
 ```
 
 Then follow these steps exactly:
