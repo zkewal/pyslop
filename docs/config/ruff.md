@@ -15,11 +15,16 @@ ast-grep. Families selected:
 - **UP** (pyupgrade): modern syntax for the floor version (`X | None`, `match`
   idioms). Old idioms invite untyped patterns.
 - **B** (flake8-bugbear): likely bugs (mutable defaults, unused loop vars).
-- **ANN** (flake8-annotations): annotations required everywhere. Includes
-  **ANN401**, which bans `Any` in annotations — the ruff side of the evidence
-  rules; `pyslop/no-any` independently requires SAFETY for explicit `Any`.
+- **ANN401** only (flake8-annotations): bans `Any` in annotations — the ruff
+  side of the evidence rules; `pyslop/no-any` independently requires SAFETY
+  for explicit `Any`. The rest of `ANN` (missing annotations) is *not*
+  selected: an unannotated legacy function is debt, not slop, and enabling it
+  on a real codebase produced thousands of findings that said nothing about
+  evidence.
 - **BLE** (flake8-blind-except): no blind `except Exception` / bare `except`.
-- **TRY** (tryceratops): `raise` without `from`, verbose logging in handlers.
+- **TRY** (tryceratops) minus **TRY003**: `raise` without `from`, verbose
+  logging in handlers. TRY003 (long message inside `raise`) is style and is
+  ignored in the shipped config.
 - **S110, S112** (flake8-bandit): `try/except/pass` and `try/except/continue`
   — silent swallowing. (Full `S` is off: bandit needs per-repo tuning.)
 - **ERA** (eradicate): dead commented-out code.
@@ -42,10 +47,9 @@ ast-grep. Families selected:
 - **T20** (flake8-print): no `print` in shipped code — use logging.
 - **TD** (flake8-todo): `TODO`/`FIXME` stay visible as findings, never silent.
 - **FIX** (flake8-fixme): same as TD for `FIXME`/`XXX`/`HACK`.
-- **D2** (pydocstyle blanks/structure): docstring formatting only. `D1xx`
-  (missing docstrings) is deliberately off — that is a style rollout per repo,
-  not slop.
 
-Note: selecting all of `D2` pulls in the mutually incompatible pairs
-`D203`/`D211` and `D212`/`D213`. The shipped config explicitly ignores
-`D203`/`D213`, matching ruff's own resolution, so runs stay warning-free.
+Deliberately **not** selected: `D` (docstring presence and shape is a per-repo
+style rollout, not slop), `ANN0xx`/`ANN2xx`, `TRY003`. Consumers who want them
+add them to their own `[tool.ruff.lint] select`. Removed in v0.1.6 after the
+first adoption showed these three families accounted for most findings while
+carrying no evidence signal.
