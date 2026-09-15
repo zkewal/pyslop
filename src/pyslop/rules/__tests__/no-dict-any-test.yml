@@ -14,6 +14,12 @@ valid:
     from typing import Any
     x: dict[str, Any] = {}
   - |
+    from typing import Any
+    class Example:
+        def foo(self):
+            x: dict[str, Any] = {}
+            return x
+  - |
     def foo(x: dict):
         pass
 invalid:
@@ -34,3 +40,13 @@ invalid:
     import typing
     def foo(x: typing.Dict[str, Any]):
         pass
+  - |
+    from typing import Any
+    class Example:
+        def foo(self, x: dict[str, Any]):
+            pass
+  - |
+    from typing import Any
+    class Example:
+        def foo(self) -> dict[str, Any]:
+            return {}

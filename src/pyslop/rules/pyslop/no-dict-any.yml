@@ -14,6 +14,7 @@ rule:
     - not:
         inside:
           kind: block
-          stopBy: end
+          stopBy:
+            kind: function_definition
 message: Function signature uses dict[str, Any] or Mapping[str, Any].
 note: "Declare a data shape (TypedDict, dataclass, or pydantic model) instead of dict[str, Any] in parameters and returns. Local variables are allowed."

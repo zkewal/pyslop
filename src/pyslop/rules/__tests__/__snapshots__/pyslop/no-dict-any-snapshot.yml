@@ -2,6 +2,38 @@ id: pyslop/no-dict-any
 snapshots:
   ? |
     from typing import Any
+    class Example:
+        def foo(self) -> dict[str, Any]:
+            return {}
+  : labels:
+    - source: dict[str, Any]
+      style: primary
+      start: 59
+      end: 73
+    - source: |-
+        def foo(self) -> dict[str, Any]:
+                return {}
+      style: secondary
+      start: 42
+      end: 92
+  ? |
+    from typing import Any
+    class Example:
+        def foo(self, x: dict[str, Any]):
+            pass
+  : labels:
+    - source: dict[str, Any]
+      style: primary
+      start: 59
+      end: 73
+    - source: |-
+        def foo(self, x: dict[str, Any]):
+                pass
+      style: secondary
+      start: 42
+      end: 88
+  ? |
+    from typing import Any
     def foo() -> dict[str, Any]:
         return {}
   : labels:
