@@ -15,7 +15,7 @@ import tomllib
 from collections.abc import Iterator, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, NamedTuple, TypedDict
+from typing import NamedTuple, TypedDict
 
 import pathspec
 
@@ -34,21 +34,25 @@ TY_CONCISE_RE = re.compile(
     r"^(?P<file>.+):(?P<line>\d+):(?P<col>\d+): "
     r"(?P<severity>\w+)\[(?P<rule>[^\]]+)\] (?P<message>.*)$"
 )
-# SAFETY: finding mappings mix str and int values by design.
-Finding = dict[str, Any]
+TY_SUMMARY_RE = re.compile(r"^Found (?P<count>\d+) diagnostics?$")
+
+
+class Finding(TypedDict):
+    """One violation in the merged output schema (see CONTEXT.md)."""
+
+    engine: str
+    rule: str
+    file: str
+    line: int
+    col: int
+    message: str
+    fix_hint: str
+    severity: str
 
 
 def bundled(*parts: str) -> Path:
     """File shipped inside the package (rules, configs)."""
     return Path(__file__).resolve().parent.joinpath(*parts)
-
-
-def bundled_rules_dir() -> Path:
-    return bundled("rules")
-
-
-def bundled_ty_config() -> Path:
-    return bundled("config", "ty.toml")
 
 
 def emit(text: str) -> None:
@@ -96,12 +100,7 @@ def discover_rules_dir(paths: list[str]) -> Path:
         vendored = candidate / "tools" / "pyslop" / "rules"
         if vendored.is_dir():
             return vendored
-    return bundled_rules_dir()
-
-
-def pyslop_excludes(pyproject: Path) -> list[str]:
-    """Exclude globs from [tool.pyslop]. Thin wrapper over pyslop_table."""
-    return pyslop_table(pyproject).get("exclude", [])
+    return bundled("rules")
 
 
 def safety_lines(text: str) -> set[int]:
@@ -124,9 +123,6 @@ def safety_lines(text: str) -> set[int]:
             if not token.line[: token.start[1]].strip():
                 covered.add(line + 1)
     return covered
-
-
-TY_SUMMARY_RE = re.compile(r"^Found (?P<count>\d+) diagnostics?$")
 
 
 def _project_root(paths: list[str]) -> Path:
@@ -186,7 +182,7 @@ def run_ty(paths: list[str]) -> list[Finding] | None:
     if proc.returncode not in (0, 1):
         emit_error(f"pyslop: ty check failed:\n{proc.stderr}")
         return None
-    findings = []
+    findings: list[Finding] = []
     summary: int | None = None
     for line in proc.stdout.splitlines():
         match = TY_CONCISE_RE.match(line)
@@ -218,10 +214,6 @@ def run_ty(paths: list[str]) -> list[Finding] | None:
     return findings
 
 
-def shipped_ruff_config() -> Path:
-    return bundled("config", "ruff.toml")
-
-
 def _start(paths: list[str]) -> Path:
     """Resolved first checked path, or the working directory."""
     return Path(paths[0]).resolve() if paths else Path.cwd()
@@ -246,7 +238,7 @@ def ruff_config_args(paths: list[str]) -> list[str]:
     """--config shipped unless the consumer has its own ruff config."""
     if _consumer_ruff_configured(_start(paths)):
         return []
-    return ["--config", str(shipped_ruff_config())]
+    return ["--config", str(bundled("config", "ruff.toml"))]
 
 
 def run_ruff(paths: list[str], *, fix: bool) -> tuple[list[Finding], int]:
@@ -409,7 +401,7 @@ def _ty_rules_block() -> str:
     No `[environment]` is stamped: ty infers the floor from the consumer's
     `requires-python`, so no PEP440 parsing is needed here.
     """
-    data = tomllib.loads(bundled_ty_config().read_text())
+    data = tomllib.loads(bundled("config", "ty.toml").read_text())
     rules = data.get("rules", {})
     lines = ["[tool.ty.rules]"]
     lines.extend(f'{key} = "{rules[key]}"' for key in sorted(rules))
@@ -432,13 +424,13 @@ def init_command(root: str) -> int:
     if vendored.is_dir():
         emit(f"pyslop: {vendored} already present, skipping")
     else:
-        shutil.copytree(bundled_rules_dir(), vendored)
+        shutil.copytree(bundled("rules"), vendored)
         emit(f"pyslop: vendored rules to {vendored}")
     for key, block, own_files in (
         ("pyslop", PYSLOP_BLOCK, ()),
         (
             "ruff",
-            _embed_toml(shipped_ruff_config(), "tool.ruff"),
+            _embed_toml(bundled("config", "ruff.toml"), "tool.ruff"),
             (".ruff.toml", "ruff.toml"),
         ),
         ("ty", _ty_rules_block(), ("ty.toml",)),
@@ -687,7 +679,7 @@ def apply_pyslop_config(findings: list[Finding]) -> list[Finding]:
         project = nearest_pyproject(path)
         if project not in cache:
             table = pyslop_table(project) if project is not None else {}
-            exclude = pyslop_excludes(project) if project is not None else []
+            exclude = table.get("exclude", [])
             spec = _exclude_spec(project, exclude) if project is not None else None
             cache[project] = (table.get("rules", {}), exclude, spec)
         rules, exclude, spec = cache[project]
@@ -696,9 +688,9 @@ def apply_pyslop_config(findings: list[Finding]) -> list[Finding]:
             if level == "off":
                 continue
             if level == "warn":
-                finding = {**finding, "severity": "warning"}
+                finding = Finding(**{**finding, "severity": "warning"})
             elif level == "error":
-                finding = {**finding, "severity": "error"}
+                finding = Finding(**{**finding, "severity": "error"})
         if project is not None and exclude:
             base = project.parent.resolve()
             absolute = path if path.is_absolute() else Path.cwd() / path
@@ -719,12 +711,16 @@ def format_command(paths: list[str]) -> int:
     return subprocess.run([binary, "format", *paths], check=False).returncode
 
 
-def print_text(findings: list[Finding]) -> None:
-    """One line per finding grouped by file, plus a summary. No color unless a TTY."""
-    ordered = sorted(
+def _sorted(findings: list[Finding]) -> list[Finding]:
+    return sorted(
         findings,
         key=lambda f: (f["file"], f["line"], f["col"], f["engine"], f["rule"]),
     )
+
+
+def print_text(findings: list[Finding]) -> None:
+    """One line per finding grouped by file, plus a summary. No color unless a TTY."""
+    ordered = _sorted(findings)
     color = sys.stdout.isatty()
     for finding in ordered:
         loc = f"{finding['file']}:{finding['line']}:{finding['col']}"
@@ -758,10 +754,7 @@ def print_github(findings: list[Finding]) -> None:
     `error` for error severity, `warning` for anything else. No summary line:
     a summary is not a workflow command; the exit code carries the signal.
     """
-    ordered = sorted(
-        findings,
-        key=lambda f: (f["file"], f["line"], f["col"], f["engine"], f["rule"]),
-    )
+    ordered = _sorted(findings)
     for finding in ordered:
         command = "error" if finding["severity"] == "error" else "warning"
         file = _escape_github_property(str(finding["file"]))
@@ -770,6 +763,17 @@ def print_github(findings: list[Finding]) -> None:
         title = _escape_github_property(f"{finding['engine']} ({finding['rule']})")
         message = _escape_github_data(str(finding["message"]))
         emit(f"::{command} file={file},line={line},col={col},title={title}::{message}")
+
+
+def _emit_findings(findings: list[Finding], output: str) -> int:
+    """Print findings in the chosen format; exit 1 on any error severity."""
+    if output == "json":
+        emit(json.dumps(findings, indent=2))
+    elif output == "github":
+        print_github(findings)
+    else:
+        print_text(findings)
+    return _findings_exit(findings)
 
 
 def _findings_exit(findings: list[Finding]) -> int:
@@ -792,13 +796,19 @@ def _render_finding(item: object, index: int) -> Finding:
             raise _RenderInputError(detail)
     line = item.get("line")
     col = item.get("col")
-    if isinstance(line, bool) or isinstance(col, bool):
+    if type(line) is not int or type(col) is not int:  # bool is not a line
         detail = f"finding {index} has no integer line/col"
         raise _RenderInputError(detail)
-    if not isinstance(line, int) or not isinstance(col, int):
-        detail = f"finding {index} has no integer line/col"
-        raise _RenderInputError(detail)
-    return item
+    return Finding(
+        engine=item["engine"],
+        rule=item["rule"],
+        file=item["file"],
+        line=line,
+        col=col,
+        message=item["message"],
+        fix_hint=str(item.get("fix_hint") or ""),
+        severity=item["severity"],
+    )
 
 
 def _read_render_findings(raw: str) -> list[Finding]:
@@ -814,20 +824,14 @@ def _read_render_findings(raw: str) -> list[Finding]:
     return [_render_finding(item, index) for index, item in enumerate(data)]
 
 
-def render_command(format: str) -> int:
+def render_command(output: str) -> int:
     """Render findings JSON piped on stdin. Shares check's exit rule."""
     try:
         findings = _read_render_findings(sys.stdin.read())
     except _RenderInputError as exc:
         emit_error(f"pyslop: render: {exc}; refusing partial results.")
         return 2
-    if format == "json":
-        emit(json.dumps(findings, indent=2))
-    elif format == "github":
-        print_github(findings)
-    else:
-        print_text(findings)
-    return _findings_exit(findings)
+    return _emit_findings(findings, output)
 
 
 class _GrepOutputError(Exception):
@@ -1022,28 +1026,22 @@ def _display_path(finding: Finding) -> Finding:
     path = Path(finding["file"]).resolve()
     cwd = Path.cwd().resolve()
     shown = path.relative_to(cwd) if path.is_relative_to(cwd) else path
-    return {**finding, "file": str(shown)}
+    return Finding(**{**finding, "file": str(shown)})
 
 
 def check_command(
     paths: list[str],
-    format: str,
+    output: str,
     *,
     fix: bool,
     no_ty: bool,
-    only: str | None = None,
+    only: str | None,
 ) -> int:
     findings, fatal = _run_engines(paths, fix=fix, no_ty=no_ty, only=only)
     if fatal:
         return fatal
     findings = [_display_path(f) for f in apply_pyslop_config(findings)]
-    if format == "json":
-        emit(json.dumps(findings, indent=2))
-    elif format == "github":
-        print_github(findings)
-    else:
-        print_text(findings)
-    return _findings_exit(findings)
+    return _emit_findings(findings, output)
 
 
 def _pyslop_version() -> str:
