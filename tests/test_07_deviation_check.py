@@ -225,3 +225,25 @@ def test_subpackage_disable_is_seen_from_monorepo_root(
     assert [(f["file"], f["line"]) for f in findings] == [
         (str(pkg / "pyproject.toml"), 6)
     ]
+
+
+@pytest.mark.parametrize(
+    ("entry", "why"),
+    [
+        ('"pyslop/no-any" = "warning"', "unknown level"),
+        ('E501 = "off"', "only applies to ast-grep rules"),
+        ('"ty/invalid-assignment" = "off"', "only applies to ast-grep rules"),
+        (f'"{RULE}" = "off"', "only applies to ast-grep rules"),
+    ],
+)
+def test_pyslop_rules_entries_that_do_nothing_are_errors(
+    entry: str, why: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Even a reason comment cannot make a no-op override valid.
+    (tmp_path / "pyproject.toml").write_text(
+        PROJECT + f"[tool.pyslop.rules]\n# {URL}\n{entry}\n"
+    )
+    code, findings = _check(capsys, tmp_path, "--only", "pyslop")
+    assert code == 1
+    assert [f["line"] for f in findings] == [7]
+    assert why in findings[0]["message"]
