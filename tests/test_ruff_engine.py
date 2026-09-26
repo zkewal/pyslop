@@ -76,3 +76,17 @@ def test_standalone_ruff_config_wins_over_shipped(
     findings = json.loads(capsys.readouterr().out)
     assert code == 0
     assert findings == []
+
+
+def test_pyproject_ruff_table_wins_over_shipped(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "p"\nversion = "0"\n\n[tool.ruff.lint]\nselect = ["E"]\n'
+    )
+    target = tmp_path / "ann.py"
+    shutil.copy(FIXTURES / "ann.py", target)
+    code = main(["check", str(target), "--format", "json", "--only", "ruff"])
+    findings = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert findings == []
