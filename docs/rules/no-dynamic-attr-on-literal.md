@@ -20,7 +20,6 @@ defaulted = getattr(obj, "name", None)
 present = hasattr(obj, "name")
 setattr(obj, "name", name)
 delattr(obj, "name")
-label = getattr(obj, "na" "me")  # implicit concatenation is still a literal
 ```
 
 Each line above is one finding: a dynamic lookup with a literal name,
