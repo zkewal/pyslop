@@ -6,7 +6,10 @@ set of evidence rules, in the spirit of [dmmulroy/anti-slop](https://github.com/
 
 Slop is code that fakes certainty or throws away type evidence: `Any`, bare `cast`, unjustified
 `type: ignore`, `except` blocks that swallow, `isinstance` ladders instead of boundary parsing.
-pyslop makes each of those an error unless it carries a `# SAFETY: <reason>` comment.
+pyslop makes each of those an error. Escape hatches (`cast`, typed ignores, explicit
+`Any`) pass with a `# SAFETY: <reason>` comment; `Any` in a signature also needs
+`# noqa: ANN401` for ruff. Swallowed exceptions and `isinstance` ladders have no
+comment escape: fix the code, or record a reasoned deviation.
 
 ## Install
 

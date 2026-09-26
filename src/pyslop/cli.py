@@ -368,6 +368,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+      # ty resolves imports from the project's .venv. Swap in your own
+      # install step if the project does not use uv.
+      - name: Install project dependencies
+        run: uv sync
       - name: Check for slop
         run: uv tool run --from {REPO_SPEC}@{rev} pyslop check
 """
@@ -506,7 +510,25 @@ def _pyslop_disables(pyslop: dict[str, object]) -> Iterator[_Disable]:
                 needs_reason=False,
             )
     for rule, value in _table(pyslop, "rules").items():
-        if str(value).lower() == "off":
+        level = str(value).lower()
+        if level not in ("off", "warn", "error"):
+            yield _Disable(
+                rule,
+                str(value),
+                f'Rule "{rule}" has unknown level "{value}" '
+                '(use "off", "warn", or "error").',
+                needs_reason=False,
+            )
+        elif "/" not in rule or rule.startswith("ty/") or rule == DEVIATION_RULE:
+            yield _Disable(
+                rule,
+                str(value),
+                f'"{rule}" cannot be set in [tool.pyslop.rules]: it only '
+                "applies to ast-grep rules. Configure ruff and ty rules in "
+                "their own sections.",
+                needs_reason=False,
+            )
+        elif level == "off":
             yield _Disable(
                 rule, str(value), f'Rule "{rule}" is turned off without a reason.'
             )

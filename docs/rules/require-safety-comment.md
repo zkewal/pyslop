@@ -36,9 +36,10 @@ user_id = cast(int, raw)  # SAFETY: raw matches ^\d+$ per route regex
 row = query()  # type: ignore[union-attr]
 ```
 
-A `# SAFETY: <non-empty reason>` on the same line or the immediately
-preceding line satisfies the rule. A `SAFETY` comment separated by a blank
-line does not count. Imports are not findings; explicit `Any` is covered by the
+A `# SAFETY: <non-empty reason>` comment on the same line, or alone on the
+immediately preceding line, satisfies the rule. A trailing SAFETY comment on
+the line above covers only that line, text inside a string never counts, and
+a `SAFETY` comment separated by a blank line does not count. Imports are not findings; explicit `Any` is covered by the
 separate [`pyslop/no-any`](no-any.md) rule.
 
 ## Notes

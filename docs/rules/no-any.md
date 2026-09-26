@@ -31,18 +31,23 @@ config: Any = load_config()  # SAFETY: validated against ConfigSchema below
 
 
 # SAFETY: this boundary accepts every JSON value by contract
-def decode(raw: bytes) -> Any: ...
+def decode(raw: bytes) -> Any: ...  # noqa: ANN401
 ```
 
-A `# SAFETY: <non-empty reason>` on the same line or the immediately
-preceding line satisfies the rule. A `SAFETY` comment separated by a blank
-line does not count. The import that provides `Any` is never flagged.
+A `# SAFETY: <non-empty reason>` comment on the same line, or alone on the
+immediately preceding line, satisfies the rule. A trailing SAFETY comment on
+the line above covers only that line, text inside a string never counts, and
+a `SAFETY` comment separated by a blank line does not count. The import that provides `Any` is never flagged.
 
 ## Notes
 
 - The ast-grep rule flags every explicit use of `Any`; the SAFETY exemption is
   applied by the `pyslop check` runner by reading the source lines, because
   same-or-previous-line proximity is not expressible in ast-grep YAML.
+- In a signature, ruff's ANN401 flags the same `Any` independently, and a
+  SAFETY comment does not satisfy ruff. Keep both: the SAFETY reason for
+  review, `# noqa: ANN401` for ruff (the shipped config keeps ANN401 on
+  purpose, see `docs/config/ruff.md`).
 - `pyslop/require-safety-comment` covers casts and typed ignores. Keeping the
   rules separate lets teams adopt those sharper escape hatches before taking
   on a large existing `Any` inventory.
