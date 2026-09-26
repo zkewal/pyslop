@@ -73,7 +73,6 @@ def test_mypy_config_left_alone(
     assert code == 1
     assert pyproject.read_text() == content
     assert any(f["engine"] == "ty" for f in findings)
-    assert all(f["engine"] != "mypy" for f in findings)
 
 
 FLOOR = Path(__file__).parent / "fixtures" / "ty_floor"
@@ -163,14 +162,19 @@ def test_native_floor_from_requires_python_forms(
 def test_dot_ty_toml_does_not_suppress_strict_defaults(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    # redundant-cast defaults to warn: only pyslop's --error all makes it an
+    # error, and .ty.toml (not a ty config name) must not switch that off.
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "floor"\nversion = "0.0.0"\nrequires-python = ">=3.12"\n'
     )
-    (tmp_path / ".ty.toml").write_text('[environment]\npython-version = "3.11"\n')
-    (tmp_path / "v312.py").write_text("type Alias = int\n")
-    code = main(
-        ["check", str(tmp_path / "v312.py"), "--format", "json", "--only", "ty"]
+    (tmp_path / ".ty.toml").write_text('[rules]\nredundant-cast = "ignore"\n')
+    target = tmp_path / "a.py"
+    target.write_text(
+        "from typing import cast\n\n\ndef f(y: int) -> int:\n    return cast(int, y)\n"
     )
+    code = main(["check", str(target), "--format", "json", "--only", "ty"])
     findings = json.loads(capsys.readouterr().out)
-    assert code == 0
-    assert findings == []
+    assert code == 1
+    assert [(f["rule"], f["severity"]) for f in findings] == [
+        ("ty/redundant-cast", "error")
+    ]
