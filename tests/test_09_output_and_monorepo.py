@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 
 import pytest
-from pathspec import PathSpec
 
 from pyslop.cli import _exclude_spec, _is_excluded, main
 
@@ -109,7 +108,7 @@ def test_exclude_glob_matrix() -> None:
         ("a/b.py", [], False),
     ]
     for rel, patterns, excluded in cases:
-        spec = PathSpec.from_lines("gitwildmatch", patterns)
+        spec = _exclude_spec(Path(), patterns)
         assert _is_excluded(rel, spec) is excluded, (rel, patterns)
 
 
@@ -126,7 +125,7 @@ def test_nested_exclude_end_to_end(
 ) -> None:
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "fixture-exclude"\nversion = "0.0.0"\n'
-        '\n[tool.pyslop]\nexclude = ["gen/**"]\n'
+        '\n[tool.pyslop]\nexclude = ["gen/**", "!gen/keep.py"]\n'
     )
     nested = tmp_path / "gen" / "deep"
     nested.mkdir(parents=True)
@@ -134,11 +133,14 @@ def test_nested_exclude_end_to_end(
     (nested / "dirty.py").write_text(dirty)
     keep = tmp_path / "keep.py"
     keep.write_text(dirty)
+    reincluded = tmp_path / "gen" / "keep.py"
+    reincluded.write_text(dirty)
     code = main(
         [
             "check",
             str(nested / "dirty.py"),
             str(keep),
+            str(reincluded),
             "--format",
             "json",
             "--only",
@@ -147,4 +149,19 @@ def test_nested_exclude_end_to_end(
     )
     findings = json.loads(capsys.readouterr().out)
     assert code == 1
-    assert [f["file"] for f in findings] == [str(keep)]
+    assert sorted(f["file"] for f in findings) == sorted([str(keep), str(reincluded)])
+
+
+def test_bad_exclude_glob_end_to_end_excludes_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "p"\nversion = "0"\n\n[tool.pyslop]\nexclude = ["!"]\n'
+    )
+    target = tmp_path / "a.py"
+    target.write_text('def f(obj: object) -> bool:\n    return hasattr(obj, "x")\n')
+    code = main(["check", str(target), "--format", "json", "--only", "ast-grep"])
+    captured = capsys.readouterr()
+    assert code == 1
+    assert [f["file"] for f in json.loads(captured.out)] == [str(target)]
+    assert "bad exclude glob" in captured.err
