@@ -19,6 +19,8 @@ name = getattr(obj, "name")
 defaulted = getattr(obj, "name", None)
 present = hasattr(obj, "name")
 setattr(obj, "name", name)
+delattr(obj, "name")
+label = getattr(obj, "na" "me")  # implicit concatenation is still a literal
 ```
 
 Each line above is one finding: a dynamic lookup with a literal name,
@@ -38,6 +40,8 @@ A variable (non-literal) name passes, as does plain `obj.name`.
 
 ## Notes
 
-- Both quote styles (`"name"`, `'name'`) are flagged. f-strings
-  (`getattr(obj, f"{name}")`) are treated as dynamic and pass.
+- Both quote styles (`"name"`, `'name'`) are flagged, and so is implicit
+  concatenation of literals (`"na" "me"`). f-strings
+  (`getattr(obj, f"{name}")`), alone or concatenated, are treated as dynamic
+  and pass.
 - `builtins.getattr` and expressions like `"a" + "b"` are out of scope.

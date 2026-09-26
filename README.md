@@ -56,7 +56,7 @@ ruff carries what it already has ([shipped config](docs/config/ruff.md), ty runs
 | `pyslop/no-blanket-ignore` | bare `type:`/`ty: ignore` without a code |
 | `pyslop/swallowed-exception` | `except` handlers that neither raise nor return |
 | `pyslop/no-isinstance-ladder` | 3+ `isinstance` branches on one value in one `if`/`elif` chain |
-| `pyslop/no-dynamic-attr-on-literal` | `getattr`/`hasattr`/`setattr` with a string-literal name |
+| `pyslop/no-dynamic-attr-on-literal` | `getattr`/`hasattr`/`setattr`/`delattr` with a string-literal name |
 | `pyslop/no-kwargs-passthrough` | `**kwargs` without `Unpack[SomeTypedDict]` in public signatures |
 | `pyslop/no-dict-any` | `dict[str, Any]` / `Mapping[str, Any]` in signatures |
 | `pyslop/no-module-mocking` | `patch("dotted.path")` / `monkeypatch.setattr("dotted.path", …)` / `delattr` / `patch.multiple` |

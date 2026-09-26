@@ -7,12 +7,17 @@ rule:
     - pattern: getattr($X, $Y, $D)
     - pattern: hasattr($X, $Y)
     - pattern: setattr($X, $Y, $V)
+    - pattern: delattr($X, $Y)
 constraints:
+  # A plain or implicitly concatenated ("a" "b") literal; f-strings are dynamic.
   Y:
     all:
-      - kind: string
+      - any:
+          - kind: string
+          - kind: concatenated_string
       - not:
           has:
             kind: interpolation
+            stopBy: end
 message: Dynamic attribute access with a string literal name.
 note: Use a typed attribute access (obj.attr) so the checker can verify it.
