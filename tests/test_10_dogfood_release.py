@@ -1,5 +1,7 @@
 import glob
 import json
+from importlib.metadata import version
+from pathlib import Path
 
 import pytest
 
@@ -25,3 +27,10 @@ def test_self_check_on_src_and_tests_is_clean(
     findings = json.loads(capsys.readouterr().out)
     assert code == 0
     assert findings == []
+
+
+@pytest.mark.parametrize("doc", ["README.md", "skills/install-pyslop/SKILL.md"])
+def test_install_docs_pin_current_release(doc: str) -> None:
+    # Bump pyproject's version and these copy-paste install lines together.
+    root = Path(__file__).parent.parent
+    assert f"pyslop@v{version('pyslop')} " in (root / doc).read_text()
