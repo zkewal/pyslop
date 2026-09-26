@@ -42,6 +42,38 @@ snapshots:
     try:
         x()
     except ValueError:
+        class Handler:
+            def run(self):
+                return None
+  : labels:
+    - source: |-
+        except ValueError:
+            class Handler:
+                def run(self):
+                    return None
+      style: primary
+      start: 13
+      end: 97
+  ? |
+    try:
+        x()
+    except ValueError:
+        def later():
+            raise
+        register(later)
+  : labels:
+    - source: |-
+        except ValueError:
+            def later():
+                raise
+            register(later)
+      style: primary
+      start: 13
+      end: 82
+  ? |
+    try:
+        x()
+    except ValueError:
         pass
   : labels:
     - source: |-
