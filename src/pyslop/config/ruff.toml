@@ -1,5 +1,6 @@
 # Shipped ruff config for pyslop. Used via `ruff --config` when the consumer
-# pyproject has no [tool.ruff] section; otherwise the consumer config wins.
+# has no ruff config of its own (`.ruff.toml`, `ruff.toml`, or [tool.ruff]
+# in pyproject.toml); otherwise the consumer config wins.
 # Preview off (default). Rule families are documented in docs/config/ruff.md.
 target-version = "py312"
 preview = false

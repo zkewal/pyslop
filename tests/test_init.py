@@ -160,3 +160,19 @@ def test_init_floor_applies_natively_after_init(
     assert any(
         f["engine"] == "ty" and f["rule"] == "ty/invalid-syntax" for f in findings
     )
+
+
+def test_init_skips_blocks_shadowed_by_standalone_configs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = fresh_repo(tmp_path)
+    (root / "ruff.toml").write_text('[lint]\nselect = ["E"]\n')
+    (root / "ty.toml").write_text('[rules]\nunresolved-import = "warn"\n')
+    assert main(["init", str(root)]) == 0
+    out = capsys.readouterr().out
+    text = (root / "pyproject.toml").read_text()
+    assert "[tool.pyslop]" in text
+    assert "[tool.ruff" not in text
+    assert "[tool.ty" not in text
+    assert "ruff.toml already present, skipping [tool.ruff]" in out
+    assert "ty.toml already present, skipping [tool.ty]" in out
