@@ -35,6 +35,8 @@ value = coerce(raw)  # ty: ignore[invalid-argument-type]
 - Bare `# noqa` is deliberately out of scope here: ruff's `PGH004` already
   flags blanket `noqa`, so this rule stays silent on comments without
   `type:`/`ty:`.
-- Matching is textual on the comment (`ignore` not followed by `[`), because
-  ast-grep's regex engine has no lookahead. `# type: ignore  # extra words`
-  is still bare and still flagged.
+- Matching is textual on the comment, because ast-grep's regex engine has no
+  lookahead. `ignore` must be a whole word (followed by a space, `[`, `#`, or
+  the end), so `# type: ignored-by-design` is not an ignore. An ignore counts
+  as coded only when its brackets hold a code: `# type: ignore[]` is still
+  bare. `# type: ignore  # extra words` is still bare and still flagged.

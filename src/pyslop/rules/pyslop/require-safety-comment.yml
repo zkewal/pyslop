@@ -9,7 +9,7 @@ rule:
     # resolution and is not covered.
     - pattern: $MOD.cast($T, $V)
     - kind: comment
-      regex: "#\\s*(type|ty)\\s*:\\s*ignore"
+      regex: "#\\s*(type|ty)\\s*:\\s*ignore(\\s|\\[|#|$)"
 constraints:
   MOD:
     regex: "^(typing|t|typing_extensions|tp)$"

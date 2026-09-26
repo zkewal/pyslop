@@ -49,6 +49,8 @@ separate [`pyslop/no-any`](no-any.md) rule.
   same-or-previous-line proximity is not expressible in ast-grep YAML.
 - Bare `# type: ignore` (no brackets) is covered too: it still needs
   a `SAFETY` reason. Flagging fully bare suppressions is a separate rule.
+  `ignore` must be a whole word, so `# type: ignored-by-design` is not an
+  ignore and is not flagged.
 - `cast()` is matched bare and qualified by `typing`, `t`, `tp`, or
   `typing_extensions`. Other `.cast()` methods (polars/pyspark
   `col.cast(...)`) are not flagged. An aliased import

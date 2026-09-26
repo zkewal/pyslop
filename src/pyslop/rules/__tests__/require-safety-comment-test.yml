@@ -11,6 +11,8 @@ valid:
     y = pl.col("a").cast(pl.Int64)
   - |
     y = col.cast("int")
+  - |
+    x = 1  # type: ignored-by-design
 invalid:
   - |
     import typing
