@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
+import tokenize
 import tomllib
 from collections.abc import Iterator, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, NamedTuple, TypedDict
 
 import pathspec
 
@@ -26,9 +29,6 @@ SAFETY_RE = re.compile(r"#\s*SAFETY\s*:\s*\S")
 REPO_SPEC = "git+https://github.com/zkewal/pyslop"
 DEVIATION_RULE = "pyslop/deviation-needs-reason"
 URL_RE = re.compile(r"https?://\S")
-KEYVAL_RE = re.compile(r"^\s*(?P<key>[^=\s][^=]*?)\s*=\s*(?P<value>.*)$")
-PAIR_RE = re.compile(r"""["']?(?P<key>[\w/.-]+)["']?\s*=\s*["'](?P<value>[^"']*)["']""")
-OFF_VALUE_RE = re.compile(r"""^\s*["']off["']\s*(#.*)?$""", re.IGNORECASE)
 PYSLOP_KEYS = ("rules", "exclude")
 TY_CONCISE_RE = re.compile(
     r"^(?P<file>.+):(?P<line>\d+):(?P<col>\d+): "
@@ -99,11 +99,26 @@ def pyslop_excludes(pyproject: Path) -> list[str]:
     return pyslop_table(pyproject).get("exclude", [])
 
 
-def has_safety(lines: list[str], lineno: int) -> bool:
-    """True when a non-empty `# SAFETY: <reason>` is on the line or the one above."""
-    same = lines[lineno - 1] if 0 < lineno <= len(lines) else ""
-    prev = lines[lineno - 2] if lineno - 2 >= 0 else ""
-    return bool(SAFETY_RE.search(same) or SAFETY_RE.search(prev))
+def safety_lines(text: str) -> set[int]:
+    """Lines where an escape hatch counts as justified.
+
+    A `# SAFETY: <reason>` comment covers its own line, and the next line
+    only when it stands alone on its line. Only real comment tokens count,
+    so text inside a string literal never does. Untokenizable source covers
+    nothing (fail closed).
+    """
+    covered: set[int] = set()
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (tokenize.TokenError, SyntaxError):
+        return covered
+    for token in tokens:
+        if token.type == tokenize.COMMENT and SAFETY_RE.search(token.string):
+            line = token.start[0]
+            covered.add(line)
+            if not token.line[: token.start[1]].strip():
+                covered.add(line + 1)
+    return covered
 
 
 TY_SUMMARY_RE = re.compile(r"^Found (?P<count>\d+) diagnostics?$")
@@ -432,11 +447,11 @@ def has_reason_comment(lines: list[str], lineno: int) -> bool:
     return stripped.startswith("#") and bool(URL_RE.search(stripped))
 
 
-def deviation_finding(pyproject: Path, line: int, col: int, message: str) -> Finding:
+def deviation_finding(config: Path, line: int, col: int, message: str) -> Finding:
     return {
         "engine": "pyslop",
         "rule": DEVIATION_RULE,
-        "file": str(pyproject),
+        "file": str(config),
         "line": line,
         "col": col,
         "message": message,
@@ -448,180 +463,136 @@ def deviation_finding(pyproject: Path, line: int, col: int, message: str) -> Fin
     }
 
 
-def _col(raw: str) -> int:
-    return len(raw) - len(raw.lstrip()) + 1
+class _Disable(NamedTuple):
+    """One rule disable found in a parsed config."""
+
+    key: str  # TOML key as written: rule id, glob, or unknown pyslop key
+    value: str | None  # value on the key's line, None when it is a list/table
+    message: str
+    needs_reason: bool = True  # False: an error even with a reason comment
 
 
-def _unquote(text: str) -> str:
-    text = text.strip()
-    if len(text) >= 2 and text[0] == text[-1] and text[0] in ("'", '"'):
-        return text[1:-1]
-    return text
+def _table(data: object, *keys: str) -> dict[str, object]:
+    """Nested TOML table at keys, or {} when any level is missing or not a table."""
+    for key in keys:
+        if not isinstance(data, dict):
+            return {}
+        data = data.get(key)
+    return {str(k): v for k, v in data.items()} if isinstance(data, dict) else {}
 
 
-def _scan_off_pairs(
-    pyproject: Path,
-    lines: list[str],
-    lineno: int,
-    raw: str,
-    kind: str,
-) -> list[Finding]:
-    """Flag unjustified disables inside `rules = { ... }` (any line of it).
+def _pyslop_disables(pyslop: dict[str, object]) -> Iterator[_Disable]:
+    for key in pyslop:
+        if key not in PYSLOP_KEYS:
+            yield _Disable(
+                key,
+                None,
+                f'Unknown [tool.pyslop] key "{key}" '
+                '(only "rules" and "exclude" are supported).',
+                needs_reason=False,
+            )
+    for rule, value in _table(pyslop, "rules").items():
+        if str(value).lower() == "off":
+            yield _Disable(
+                rule, str(value), f'Rule "{rule}" is turned off without a reason.'
+            )
 
-    kind is "pyslop" (value "off" disables) or "ty" ("warn"/"ignore"
-    downgrades). Each pair is judged by the comment above its own line.
+
+def _ruff_disables(ruff: dict[str, object]) -> Iterator[_Disable]:
+    for path in (
+        ("lint", "per-file-ignores"),
+        ("lint", "extend-per-file-ignores"),
+        ("per-file-ignores",),
+        ("extend-per-file-ignores",),
+    ):
+        for glob in _table(ruff, *path):
+            yield _Disable(
+                glob,
+                None,
+                f'per-file-ignores entry for "{glob}" '
+                "needs a reason and an issue link.",
+            )
+
+
+def _ty_rule_disables(rules: dict[str, object], where: str) -> Iterator[_Disable]:
+    for rule, value in rules.items():
+        if str(value).lower() in ("warn", "ignore"):
+            yield _Disable(
+                rule,
+                str(value),
+                f'{where} sets "{rule}" to "{value}" without a reason.',
+            )
+
+
+def _ty_disables(ty: dict[str, object]) -> Iterator[_Disable]:
+    yield from _ty_rule_disables(_table(ty, "rules"), "ty rules")
+    overrides = ty.get("overrides")
+    for override in overrides if isinstance(overrides, list) else []:
+        yield from _ty_rule_disables(_table(override, "rules"), "ty override")
+
+
+def _config_disables(config: Path, data: dict[str, object]) -> Iterator[_Disable]:
+    """Disables in one parsed config, by file kind."""
+    if config.name == "pyproject.toml":
+        yield from _pyslop_disables(_table(data, "tool", "pyslop"))
+        yield from _ruff_disables(_table(data, "tool", "ruff"))
+        yield from _ty_disables(_table(data, "tool", "ty"))
+    elif config.name == "ty.toml":
+        yield from _ty_disables(data)
+    else:
+        yield from _ruff_disables(data)
+
+
+def _locate(
+    lines: list[str], disable: _Disable, used: set[tuple[int, int]]
+) -> tuple[int, int]:
+    """(line, col) of the first unused `key = [value]` spot, else (1, 1).
+
+    tomllib gives no positions, so this finds the key text. It handles
+    tables, dotted keys, and inline tables. Where a key repeats, the first
+    unused spot in file order wins.
     """
-    findings = []
-    for pair in PAIR_RE.finditer(raw):
-        value = pair.group("value").lower()
-        disabling = value == "off" if kind == "pyslop" else value in ("warn", "ignore")
-        if not disabling or has_reason_comment(lines, lineno):
-            continue
-        name = pair.group("key")
-        if kind == "pyslop":
-            message = f'Rule "{name}" is turned off without a reason.'
-        else:
-            message = (
-                f'ty override sets "{name}" to "{pair.group("value")}" '
-                "without a reason."
-            )
-        findings.append(deviation_finding(pyproject, lineno, pair.start() + 1, message))
-    return findings
-
-
-def _unknown_key_finding(pyproject: Path, lineno: int, raw: str, key: str) -> Finding:
-    return deviation_finding(
-        pyproject,
-        lineno,
-        _col(raw),
-        f'Unknown [tool.pyslop] key "{key}" '
-        '(only "rules" and "exclude" are supported).',
+    value = (
+        "" if disable.value is None else rf"""\s*["']{re.escape(disable.value)}["']"""
     )
+    pattern = re.compile(
+        rf"""(?:^|[\s{{.,])(?P<key>(["']?){re.escape(disable.key)}\2)\s*={value}"""
+    )
+    for lineno, raw in enumerate(lines, start=1):
+        if raw.lstrip().startswith("#"):
+            continue
+        for match in pattern.finditer(raw):
+            spot = (lineno, match.start("key") + 1)
+            if spot not in used:
+                used.add(spot)
+                return spot
+    return 1, 1
 
 
-def _section_status(
-    header: str, pyproject: Path, lineno: int, raw: str
-) -> tuple[str | None, list[Finding]]:
-    """Section for a normalized TOML header, plus an unknown-key finding."""
-    section = {
-        "[tool.pyslop]": "pyslop",
-        "[tool.pyslop.rules]": "pyslop-rules",
-        "[tool.ruff.lint.per-file-ignores]": "ruff-ignores",
-        "[[tool.ty.overrides]]": "ty-overrides",
-    }.get(header)
-    if section is not None:
-        return section, []
-    match = re.match(r"^\[tool\.pyslop\.([^]]+)\]$", header)
-    if match and match.group(1).split(".")[0] not in PYSLOP_KEYS:
-        return None, [_unknown_key_finding(pyproject, lineno, raw, match.group(1))]
-    return None, []
+def check_config_deviations(config: Path) -> list[Finding]:
+    """Flag unjustified rule disables in one config file.
 
-
-def _pyslop_value_findings(
-    pyproject: Path, lines: list[str], lineno: int, raw: str, section: str
-) -> tuple[list[Finding], str | None]:
-    """(findings, pending) for [tool.pyslop] and [tool.pyslop.rules] lines."""
-    match = KEYVAL_RE.match(raw)
-    if match is None:
-        return [], None
-    key = _unquote(match.group("key"))
-    value = match.group("value")
-    pending_kind: str | None = None
-    out: list[Finding] = []
-    if section == "pyslop":
-        if key == "rules":
-            out = _scan_off_pairs(pyproject, lines, lineno, raw, "pyslop")
-            if value.count("{") - value.count("}") > 0:
-                pending_kind = "pyslop"
-        elif key.split(".")[0] not in PYSLOP_KEYS:
-            out = [_unknown_key_finding(pyproject, lineno, raw, key)]
-    elif OFF_VALUE_RE.match(value) and not has_reason_comment(lines, lineno):
-        out = [
-            deviation_finding(
-                pyproject,
-                lineno,
-                _col(raw),
-                f'Rule "{key}" is turned off without a reason.',
-            )
-        ]
-    return out, pending_kind
-
-
-def _tool_value_findings(
-    pyproject: Path, lines: list[str], lineno: int, raw: str, section: str
-) -> tuple[list[Finding], str | None]:
-    """(findings, pending) for per-file-ignores and ty override lines."""
-    match = KEYVAL_RE.match(raw)
-    if match is None:
-        return [], None
-    key = _unquote(match.group("key"))
-    value = match.group("value")
-    pending_kind: str | None = None
-    out: list[Finding] = []
-    if section == "ruff-ignores":
-        if not has_reason_comment(lines, lineno):
-            out = [
-                deviation_finding(
-                    pyproject,
-                    lineno,
-                    _col(raw),
-                    f'per-file-ignores entry for "{key}" '
-                    "needs a reason and an issue link.",
-                )
-            ]
-    elif section == "ty-overrides" and key == "rules":
-        out = _scan_off_pairs(pyproject, lines, lineno, raw, "ty")
-        if value.count("{") - value.count("}") > 0:
-            pending_kind = "ty"
-    return out, pending_kind
-
-
-def check_pyproject_deviations(pyproject: Path) -> list[Finding]:
-    """Flag unjustified rule disables in one pyproject.toml (line-oriented).
-
-    Sources: `[tool.pyslop.rules]` entries set to `"off"` (table or inline
-    form), every `[tool.ruff.lint.per-file-ignores]` entry, and
-    `[[tool.ty.overrides]]` rule downgrades to `"warn"`/`"ignore"`.
+    Parsed with tomllib, so every TOML spelling of a disable counts:
+    - pyproject.toml: `[tool.pyslop.rules]` set to "off", ruff
+      per-file-ignores, and ty rules or overrides set to "warn"/"ignore".
+      Unknown `[tool.pyslop]` keys are errors too.
+    - ruff.toml / .ruff.toml: per-file-ignores.
+    - ty.toml: rules or overrides set to "warn"/"ignore".
     Justified means the line directly above is a comment with a URL.
-    Unknown `[tool.pyslop]` keys are errors too.
     """
     try:
-        text = pyproject.read_text()
-    except OSError:
+        text = config.read_text()
+        data = tomllib.loads(text)
+    except (OSError, tomllib.TOMLDecodeError):
         return []
     lines = text.splitlines()
+    used: set[tuple[int, int]] = set()
     findings: list[Finding] = []
-    section: str | None = None
-    pending: str | None = None  # inside multiline `rules = { ... }`
-    depth = 0
-    for lineno, raw in enumerate(lines, start=1):
-        stripped = raw.strip()
-        if stripped.startswith("["):
-            header = re.sub(r"\s+", "", stripped).replace('"', "").replace("'", "")
-            section, header_findings = _section_status(header, pyproject, lineno, raw)
-            findings.extend(header_findings)
-            pending = None
+    for disable in _config_disables(config, data):
+        line, col = _locate(lines, disable, used)
+        if disable.needs_reason and has_reason_comment(lines, line):
             continue
-        if section is None:
-            continue
-        if pending is not None:
-            findings.extend(_scan_off_pairs(pyproject, lines, lineno, raw, pending))
-            depth += raw.count("{") - raw.count("}")
-            if depth <= 0:
-                pending = None
-            continue
-        if section in ("pyslop", "pyslop-rules"):
-            pair_findings, pending_kind = _pyslop_value_findings(
-                pyproject, lines, lineno, raw, section
-            )
-        else:
-            pair_findings, pending_kind = _tool_value_findings(
-                pyproject, lines, lineno, raw, section
-            )
-        findings.extend(pair_findings)
-        if pending_kind is not None:
-            pending = pending_kind
-            depth = raw.count("{") - raw.count("}")
+        findings.append(deviation_finding(config, line, col, disable.message))
     return findings
 
 
@@ -830,7 +801,7 @@ def _preview(item: object) -> str:
     return f"{item!r}"[:200]
 
 
-def _grep_finding(item: object, sources: dict[str, list[str]]) -> Finding | None:
+def _grep_finding(item: object, sources: dict[str, set[int]]) -> Finding | None:
     """One finding, or None when SAFETY-justified. Raises _GrepOutputError."""
     if not isinstance(item, dict):
         detail = f"finding is not an object: {_preview(item)}"
@@ -854,11 +825,11 @@ def _grep_finding(item: object, sources: dict[str, list[str]]) -> Finding | None
     if rule in SAFETY_RULES:
         if file not in sources:
             try:
-                sources[file] = Path(file).read_text().splitlines()
+                sources[file] = safety_lines(Path(file).read_text())
             except OSError as exc:
                 detail = f"cannot read source for finding: {file} ({exc})"
                 raise _GrepOutputError(detail) from exc
-        if has_safety(sources[file], line):
+        if line in sources[file]:
             return None
     return {
         "engine": "ast-grep",
@@ -931,7 +902,7 @@ def run_ast_grep(paths: list[str]) -> tuple[list[Finding], int]:
     except _GrepOutputError as exc:
         emit_error(f"pyslop: ast-grep: {exc}; refusing partial results.")
         return [], 2
-    sources: dict[str, list[str]] = {}
+    sources: dict[str, set[int]] = {}
     findings: list[Finding] = []
     try:
         for item in raw:
@@ -944,14 +915,37 @@ def run_ast_grep(paths: list[str]) -> tuple[list[Finding], int]:
     return findings, 0
 
 
-def _deviation_projects(paths: list[str]) -> list[Path]:
-    """Deduped nearest pyprojects for the checked paths."""
-    seen: list[Path] = []
+CONFIG_NAMES = ("pyproject.toml", "ruff.toml", ".ruff.toml", "ty.toml")
+SKIP_DIRS = frozenset({"node_modules", "__pycache__", "site-packages"})
+
+
+def _configs_in(directory: Path) -> Iterator[Path]:
+    for name in CONFIG_NAMES:
+        if (directory / name).is_file():
+            yield directory / name
+
+
+def _deviation_configs(paths: list[str]) -> list[Path]:
+    """Every config that can disable a rule for the checked paths, deduped.
+
+    Walks up from each path to its project root (nearest pyproject), and
+    down through checked directories, so a subpackage in a monorepo cannot
+    turn a rule off unseen when the root is checked.
+    """
+    seen: dict[Path, None] = {}
     for raw_path in paths:
-        candidate = nearest_pyproject(Path(raw_path))
-        if candidate is not None and candidate not in seen:
-            seen.append(candidate)
-    return seen
+        start = Path(raw_path).resolve()
+        for directory in walk_up(start):
+            seen.update(dict.fromkeys(_configs_in(directory)))
+            if (directory / "pyproject.toml").is_file():
+                break
+        if start.is_dir():
+            for root, dirs, _ in os.walk(start):
+                dirs[:] = [
+                    d for d in dirs if not d.startswith(".") and d not in SKIP_DIRS
+                ]
+                seen.update(dict.fromkeys(_configs_in(Path(root))))
+    return list(seen)
 
 
 def _run_engines(
@@ -975,8 +969,8 @@ def _run_engines(
             return findings, 2
         findings.extend(ty_findings)
     if only in (None, "pyslop"):
-        for pyproject in _deviation_projects(paths):
-            findings.extend(check_pyproject_deviations(pyproject))
+        for config in _deviation_configs(paths):
+            findings.extend(check_config_deviations(config))
     return findings, 0
 
 
