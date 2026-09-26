@@ -1,10 +1,13 @@
-# Self-lint config for plain `ruff check` / `ruff format` runs on this repo.
-# (The shipped consumer config lives in src/pyslop/config/ruff.toml.)
+# Self-lint config for this repo. pyslop honors a consumer ruff.toml, so this
+# extends the shipped profile (src/pyslop/config/ruff.toml) to keep the
+# self-check as strict as what consumers get.
 #
 # tests/fixtures/ruff/fix.py must stay unsorted: the --fix test proves
 # `pyslop check --fix` sorts it (see test_fix_sorts_imports_and_leaves_cast_untouched).
 # tests/fixtures/monorepo uses an undefined MONOREPO_SLOP marker: the --only
 # ast-grep test proves the vendored root rules fire and excludes apply.
+extend = "src/pyslop/config/ruff.toml"
+
 [lint.per-file-ignores]
 "tests/fixtures/ruff/fix.py" = ["I001"]
 "tests/fixtures/monorepo/*.py" = ["F821"]

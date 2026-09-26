@@ -58,3 +58,35 @@ def test_fix_sorts_imports_and_leaves_cast_untouched(
         f["engine"] == "ast-grep" and f["rule"] == "pyslop/require-safety-comment"
         for f in findings
     )
+
+
+@pytest.mark.parametrize("name", ["ruff.toml", ".ruff.toml"])
+def test_standalone_ruff_config_wins_over_shipped(
+    name: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Root ruff config above a package pyproject that has no [tool.ruff]:
+    # ruff keeps walking up, so pyslop must not force the shipped profile.
+    (tmp_path / name).write_text('[lint]\nselect = ["E"]\n')
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "pyproject.toml").write_text('[project]\nname = "pkg"\nversion = "0"\n')
+    target = pkg / "ann.py"
+    shutil.copy(FIXTURES / "ann.py", target)
+    code = main(["check", str(target), "--format", "json", "--only", "ruff"])
+    findings = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert findings == []
+
+
+def test_pyproject_ruff_table_wins_over_shipped(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "p"\nversion = "0"\n\n[tool.ruff.lint]\nselect = ["E"]\n'
+    )
+    target = tmp_path / "ann.py"
+    shutil.copy(FIXTURES / "ann.py", target)
+    code = main(["check", str(target), "--format", "json", "--only", "ruff"])
+    findings = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert findings == []
