@@ -17,11 +17,19 @@ CHECK_ARGV = [
     "--only",
     "ast-grep",
 ]
+REL = "tests/fixtures/monorepo/pkg_a"
 EXPECTED = [
-    f"::error file={MONO}/pkg_a/also_bad.py,line=1,col=5,title={TITLE}::{MSG}",
-    f"::error file={MONO}/pkg_a/bad.py,line=1,col=5,title={TITLE}::{MSG}",
-    f"::error file={MONO}/pkg_a/bad.py,line=3,col=5,title={TITLE}::{MSG}",
+    f"::error file={REL}/also_bad.py,line=1,col=5,title={TITLE}::{MSG}",
+    f"::error file={REL}/bad.py,line=1,col=5,title={TITLE}::{MSG}",
+    f"::error file={REL}/bad.py,line=3,col=5,title={TITLE}::{MSG}",
 ]
+
+
+@pytest.fixture(autouse=True)
+def _repo_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Findings show paths relative to the working dir; pin it so the
+    # expected lines below are literal.
+    monkeypatch.chdir(Path(__file__).parent.parent)
 
 
 def _render(

@@ -79,9 +79,14 @@ def nearest_pyproject(path: Path) -> Path | None:
 
 def require_binary(name: str) -> str | None:
     """Engine binary path, or None after reporting it missing."""
-    binary = shutil.which(name)
+    # Pinned engines install beside pyslop's interpreter; prefer them over
+    # PATH, which also makes a direct `.venv/bin/pyslop` call work.
+    here = str(Path(sys.executable).parent)
+    binary = shutil.which(name, path=here) or shutil.which(name)
     if binary is None:
-        emit_error(f"pyslop: {name} binary not found on PATH")
+        emit_error(
+            f"pyslop: {name} binary not found next to {sys.executable} or on PATH"
+        )
     return binary
 
 
@@ -249,7 +254,16 @@ def run_ruff(paths: list[str], *, fix: bool) -> tuple[list[Finding], int]:
     binary = require_binary("ruff")
     if binary is None:
         return [], 2
-    cmd = [binary, "check", "--output-format", "json", *ruff_config_args(paths)]
+    # --force-exclude: pre-commit passes file names, and ruff otherwise
+    # drops the consumer's exclude for explicitly named files.
+    cmd = [
+        binary,
+        "check",
+        "--output-format",
+        "json",
+        "--force-exclude",
+        *ruff_config_args(paths),
+    ]
     if fix:
         cmd.append("--fix")
     proc = subprocess.run([*cmd, *paths], capture_output=True, text=True, check=False)
@@ -694,7 +708,9 @@ def print_text(findings: list[Finding]) -> None:
         loc = f"{finding['file']}:{finding['line']}:{finding['col']}"
         if color:
             loc = f"\x1b[1m{loc}\x1b[0m"
-        emit(f"{loc} {finding['engine']}/{finding['rule']} {finding['message']}")
+        rule = str(finding["rule"])
+        label = rule if "/" in rule else f"{finding['engine']}/{rule}"
+        emit(f"{loc} {label} {finding['message']}")
     total = len(ordered)
     errors = sum(1 for finding in ordered if finding["severity"] == "error")
     emit(
@@ -953,16 +969,17 @@ def _run_engines(
 ) -> tuple[list[Finding], int]:
     """Run the selected engines. Returns (findings, fatal_exit)."""
     findings: list[Finding] = []
-    if only in (None, "ast-grep"):
-        grep_findings, fatal = run_ast_grep(paths)
-        if fatal:
-            return findings, fatal
-        findings.extend(grep_findings)
+    # ruff first: --fix rewrites files, and later engines must see the result.
     if only in (None, "ruff"):
         ruff_findings, fatal = run_ruff(paths, fix=fix)
         if fatal:
             return findings, fatal
         findings.extend(ruff_findings)
+    if only in (None, "ast-grep"):
+        grep_findings, fatal = run_ast_grep(paths)
+        if fatal:
+            return findings, fatal
+        findings.extend(grep_findings)
     if only in (None, "ty") and not no_ty:
         ty_findings = run_ty(paths)
         if ty_findings is None:
@@ -972,6 +989,18 @@ def _run_engines(
         for config in _deviation_configs(paths):
             findings.extend(check_config_deviations(config))
     return findings, 0
+
+
+def _display_path(finding: Finding) -> Finding:
+    """File relative to the working dir when under it, else absolute.
+
+    Engines disagree (ruff reports absolute paths, ast-grep relative), so
+    one form keeps grouping, sorting, and GitHub annotations consistent.
+    """
+    path = Path(finding["file"]).resolve()
+    cwd = Path.cwd().resolve()
+    shown = path.relative_to(cwd) if path.is_relative_to(cwd) else path
+    return {**finding, "file": str(shown)}
 
 
 def check_command(
@@ -985,7 +1014,7 @@ def check_command(
     findings, fatal = _run_engines(paths, fix=fix, no_ty=no_ty, only=only)
     if fatal:
         return fatal
-    findings = apply_pyslop_config(findings)
+    findings = [_display_path(f) for f in apply_pyslop_config(findings)]
     if format == "json":
         emit(json.dumps(findings, indent=2))
     elif format == "github":
@@ -1045,6 +1074,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "check":
+        if args.only == "ty" and args.no_ty:
+            emit_error("pyslop: --only ty with --no-ty runs nothing")
+            return 2
+        if args.fix and args.only not in (None, "ruff"):
+            emit_error(f"pyslop: --fix only applies to ruff, not --only {args.only}")
+            return 2
         return check_command(
             args.paths, args.format, fix=args.fix, no_ty=args.no_ty, only=args.only
         )

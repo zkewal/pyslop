@@ -90,3 +90,50 @@ def test_pyproject_ruff_table_wins_over_shipped(
     findings = json.loads(capsys.readouterr().out)
     assert code == 0
     assert findings == []
+
+
+def test_fix_reports_lines_of_the_fixed_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = tmp_path / "d.py"
+    target.write_text(
+        "import os\nimport sys\n\n\ndef f() -> None:\n"
+        "    try:\n        pass\n    except ValueError:\n        pass\n"
+    )
+    main(["check", str(target), "--fix", "--format", "json", "--no-ty"])
+    findings = json.loads(capsys.readouterr().out)
+    text = target.read_text().splitlines()
+    swallowed = [f for f in findings if f["rule"] == "pyslop/swallowed-exception"]
+    assert "import os" not in text
+    assert [text[f["line"] - 1].strip() for f in swallowed] == ["except ValueError:"]
+
+
+def test_consumer_ruff_exclude_applies_to_named_files(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # pre-commit names files explicitly; the consumer's exclude must still hold.
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "p"\nversion = "0"\n\n'
+        '[tool.ruff]\nextend-exclude = ["gen"]\n'
+    )
+    (tmp_path / "gen").mkdir()
+    (tmp_path / "gen" / "a.py").write_text("import os\n")
+    code = main(
+        ["check", str(tmp_path / "gen" / "a.py"), "--format", "json", "--only", "ruff"]
+    )
+    assert code == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+
+def test_engines_report_one_path_form_per_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "a.py").write_text(
+        "import os\n\n\ndef f() -> None:\n    try:\n        pass\n"
+        "    except ValueError:\n        pass\n"
+    )
+    main(["check", "a.py", "--format", "json", "--no-ty"])
+    findings = json.loads(capsys.readouterr().out)
+    assert {f["engine"] for f in findings} == {"ruff", "ast-grep"}
+    assert {f["file"] for f in findings} == {"a.py"}
