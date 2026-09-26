@@ -13,15 +13,11 @@ def test_len_of_int_yields_ty_error(capsys: pytest.CaptureFixture[str]) -> None:
     code = main(["check", str(FIXTURES / "bad.py"), "--format", "json", "--only", "ty"])
     findings = json.loads(capsys.readouterr().out)
     assert code == 1
-    ty_findings = [f for f in findings if f["engine"] == "ty"]
-    assert any(
-        f["rule"] == "ty/invalid-argument-type"
-        and f["severity"] == "error"
-        and f["file"].endswith("bad.py")
-        and f["line"] == 1
-        and f["message"]
-        for f in ty_findings
-    )
+    assert [(f["rule"], f["severity"], f["line"]) for f in findings] == [
+        ("ty/invalid-argument-type", "error", 1)
+    ]
+    assert findings[0]["file"].endswith("bad.py")
+    assert findings[0]["message"]
 
 
 def test_clean_file_exits_zero_with_empty_list(
