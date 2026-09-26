@@ -1,6 +1,6 @@
 # Decisions and backlog
 
-Design record: `~/Desktop/ho-repos/research-notes/python-anti-slop-toolkit-2026-09-07.md` (aligned design section).
+Design record: [`docs/adr/0001-aligned-design.md`](adr/0001-aligned-design.md). This file tracks later decisions and the backlog.
 
 ## Decided
 - Thin orchestrator over ruff, ty, ast-grep. No own AST walker.
