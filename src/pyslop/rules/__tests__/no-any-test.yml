@@ -8,6 +8,13 @@ valid:
   - |
     import typing
     x: int = 1
+  - |
+    Any = 3
+  - |
+    def Any():
+        pass
+  - |
+    value = obj.Any
 invalid:
   - |
     from typing import Any
@@ -16,3 +23,6 @@ invalid:
     import typing
     def load() -> typing.Any:
         return 1
+  - |
+    import typing as t
+    x: t.Any = 1

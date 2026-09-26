@@ -12,6 +12,10 @@ valid:
     value = getattr(obj, f"{name}")
   - |
     value = obj.name
+  - |
+    value = getattr(obj, "prefix_" f"{name}")
+  - |
+    delattr(obj, name)
 invalid:
   - |
     value = getattr(obj, "name")
@@ -21,3 +25,9 @@ invalid:
     ok = hasattr(obj, "name")
   - |
     setattr(obj, "name", value)
+  - |
+    delattr(obj, "name")
+  - |
+    value = getattr(obj, "na" "me")
+  - |
+    value = getattr(obj, 'name')

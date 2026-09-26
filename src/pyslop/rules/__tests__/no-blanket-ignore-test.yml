@@ -6,6 +6,8 @@ valid:
     x = 1  # ty: ignore[invalid-assignment]
   - |
     x = 1  # noqa: F401
+  - |
+    x = 1  # type: ignored-by-design
 invalid:
   - |
     x = 1  # type: ignore
@@ -13,3 +15,7 @@ invalid:
     x = 1  # ty: ignore
   - |
     x = 1  # type: ignore  # SAFETY: still bare, still wrong
+  - |
+    x = 1  # type: ignore[]
+  - |
+    x = 1  # ty: ignore[ ]

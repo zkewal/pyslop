@@ -53,3 +53,17 @@ invalid:
             fallback()
         except OSError:
             pass
+  - |
+    try:
+        x()
+    except ValueError:
+        def later():
+            raise
+        register(later)
+  - |
+    try:
+        x()
+    except ValueError:
+        class Handler:
+            def run(self):
+                return None

@@ -4,8 +4,14 @@ severity: error
 rule:
   any:
     - pattern: cast($T, $V)
-    - pattern: typing.cast($T, $V)
+    # Module-qualified casts only for typing-like modules, so `col.cast(...)`
+    # (polars, pyspark) stays clean. `from typing import cast as c` needs alias
+    # resolution and is not covered.
+    - pattern: $MOD.cast($T, $V)
     - kind: comment
-      regex: "#\\s*(type|ty)\\s*:\\s*ignore"
+      regex: "#\\s*(type|ty)\\s*:\\s*ignore(\\s|\\[|#|$)"
+constraints:
+  MOD:
+    regex: "^(typing|t|typing_extensions|tp)$"
 message: Cast or typed ignore without a SAFETY justification.
 note: "Add `# SAFETY: <reason>` on the same or the immediately preceding line, or remove the cast or typed ignore."

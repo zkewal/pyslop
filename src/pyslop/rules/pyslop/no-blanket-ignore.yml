@@ -4,8 +4,10 @@ severity: error
 rule:
   all:
     - kind: comment
-    - regex: "#\\s*(type|ty)\\s*:\\s*ignore"
+    # `ignore` as a whole word: `# type: ignored-by-design` is not an ignore.
+    - regex: "#\\s*(type|ty)\\s*:\\s*ignore(\\s|\\[|#|$)"
+    # A code inside the brackets; `ignore[]` is still blanket.
     - not:
-        regex: "#\\s*(type|ty)\\s*:\\s*ignore\\s*\\["
+        regex: "#\\s*(type|ty)\\s*:\\s*ignore\\s*\\[\\s*[^\\]\\s]"
 message: Bare ignore comment without an error code.
 note: "Name what you suppress: `# type: ignore[code]` / `# ty: ignore[code]`. Bare `# noqa` is covered by ruff PGH004."

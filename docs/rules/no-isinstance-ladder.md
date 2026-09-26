@@ -53,6 +53,23 @@ def handle_mixed(value, other):
 
 Two branches pass, and branches on different subjects pass — the rule only
 fires when three or more checks share the same variable name in one chain.
+The checks do not have to be adjacent or start the chain: a leading
+`if value is None:` or a branch on another subject sitting between them
+still leaves a ladder.
+
+```python
+def handle(value, other):
+    if value is None:  # still a ladder: three checks on value below
+        return 0
+    elif isinstance(value, int):
+        return 1
+    elif isinstance(other, str):
+        return 2
+    elif isinstance(value, str):
+        return 3
+    elif isinstance(value, float):
+        return 4
+```
 
 ## Notes
 
@@ -61,3 +78,5 @@ fires when three or more checks share the same variable name in one chain.
   `not isinstance(...)`) are not matched — a known limitation, kept simple
   on purpose.
 - A chain of four or more branches is still one finding on the `if`.
+- Scope is one `if`/`elif` chain. Separate `if` statements in the same
+  function, each with one `isinstance()`, do not count.

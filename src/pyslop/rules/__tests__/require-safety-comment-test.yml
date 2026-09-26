@@ -6,7 +6,23 @@ id: pyslop/require-safety-comment
 valid:
   - |
     x = 1
+  - |
+    import polars as pl
+    y = pl.col("a").cast(pl.Int64)
+  - |
+    y = col.cast("int")
+  - |
+    x = 1  # type: ignored-by-design
 invalid:
+  - |
+    import typing
+    x = typing.cast(int, "1")
+  - |
+    import typing as t
+    x = t.cast(int, "1")
+  - |
+    import typing_extensions
+    x = typing_extensions.cast(int, "1")
   - |
     from typing import cast
     x = cast(int, "1")
