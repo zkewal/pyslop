@@ -64,9 +64,13 @@ Each rule has rationale and bad/good examples under [docs/rules](docs/rules/).
 ## Deviations
 
 Suppressions are allowed but must stay honest. Any config override that turns a rule
-off for a path — `[tool.pyslop.rules]`, `[tool.ruff.lint.per-file-ignores]`,
-`[[tool.ty.overrides]]` — needs a comment on the line directly above it with a reason
-and an issue URL, or `pyslop check` reports `pyslop/deviation-needs-reason`:
+off needs a comment on the line directly above it with a reason and an issue URL, or
+`pyslop check` reports `pyslop/deviation-needs-reason`. That covers `[tool.pyslop.rules]`
+set to `"off"`, ruff `per-file-ignores` / `extend-per-file-ignores`, and ty `rules` or
+`overrides` set to `"warn"` / `"ignore"`, in `pyproject.toml`, `ruff.toml`,
+`.ruff.toml`, and `ty.toml`, in any TOML spelling. Every config under a checked
+directory counts, so a monorepo subpackage cannot disable a rule unseen. A global
+ruff `ignore` or a shorter `select` is a profile choice and is not flagged.
 
 ```toml
 [tool.pyslop.rules]
