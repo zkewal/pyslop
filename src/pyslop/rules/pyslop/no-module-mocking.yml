@@ -1,19 +1,46 @@
 id: pyslop/no-module-mocking
 language: python
 severity: error
+utils:
+  # Only a dotted import path counts ("pkg.mod.attr"). URLs, routes, and
+  # single names (`client.patch("items/1")`, `requests.patch("https://...")`)
+  # are HTTP calls, not mocks.
+  dotted-path:
+    kind: string
+    regex: "^['\"][^\\W\\d]\\w*(\\.[^\\W\\d]\\w*)+['\"]$"
+  first-arg-dotted:
+    has:
+      field: arguments
+      has:
+        nthChild: 1
+        matches: dotted-path
 rule:
+  kind: call
   any:
-    - pattern: 'patch("$P")'
-    - pattern: 'patch("$P", $$$)'
-    - pattern: '$M.patch("$P")'
-    - pattern: '$M.patch("$P", $$$)'
-    - pattern: 'monkeypatch.setattr("$T")'
-    - pattern: 'monkeypatch.setattr("$T", $$$)'
-constraints:
-  P:
-    # Exclude slash-prefixed route literals (e.g. TestClient.patch("/..."));
-    # retains Unicode dotted paths (empty input no longer matched, but that is
-    # not a valid Python target anyway).
-    regex: '^[^/]'
+    # patch(...), mock.patch(...), mocker.patch(...), patch.multiple(...)
+    - all:
+        - has:
+            field: function
+            regex: "^(\\w+\\.)*patch(\\.multiple)?$"
+        - matches: first-arg-dotted
+    # patch(target="a.b")
+    - all:
+        - has:
+            field: function
+            regex: "^(\\w+\\.)*patch$"
+        - has:
+            field: arguments
+            has:
+              kind: keyword_argument
+              all:
+                - has: {field: name, regex: "^target$"}
+                - has: {field: value, matches: dotted-path}
+    # monkeypatch.setattr/delattr("a.b", ...), any receiver so a renamed
+    # fixture (`mp.setattr`) counts too.
+    - all:
+        - has:
+            field: function
+            regex: "^\\w+\\.(setattr|delattr)$"
+        - matches: first-arg-dotted
 message: Test mocks a module by dotted string path.
 note: "Use a real seam (dependency injection, protocol, or fixture) instead of patch('dotted.path'). patch.object and monkeypatch.setattr(obj, 'attr', v) are allowed."

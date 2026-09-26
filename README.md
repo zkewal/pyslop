@@ -59,7 +59,7 @@ ruff carries what it already has ([shipped config](docs/config/ruff.md), ty runs
 | `pyslop/no-dynamic-attr-on-literal` | `getattr`/`hasattr`/`setattr` with a string-literal name |
 | `pyslop/no-kwargs-passthrough` | `**kwargs` without `Unpack[SomeTypedDict]` in public signatures |
 | `pyslop/no-dict-any` | `dict[str, Any]` / `Mapping[str, Any]` in signatures |
-| `pyslop/no-module-mocking` | `patch("dotted.path")` / `monkeypatch.setattr("dotted.path", …)` |
+| `pyslop/no-module-mocking` | `patch("dotted.path")` / `monkeypatch.setattr("dotted.path", …)` / `delattr` / `patch.multiple` |
 | `pyslop/deviation-needs-reason` | config overrides that dodge a rule without a reason |
 
 Each rule has rationale and bad/good examples under [docs/rules](docs/rules/).
