@@ -176,3 +176,29 @@ def test_init_skips_blocks_shadowed_by_standalone_configs(
     assert "[tool.ty" not in text
     assert "ruff.toml already present, skipping [tool.ruff]" in out
     assert "ty.toml already present, skipping [tool.ty]" in out
+
+
+def test_init_keeps_rules_it_does_not_name_strict(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A rule missing from the stamped block (e.g. one added in a later ty
+    # release) must still be an error, as it is without any consumer config.
+    root = fresh_repo(tmp_path)
+    assert main(["init", str(root)]) == 0
+    pyproject = root / "pyproject.toml"
+    kept = [
+        line
+        for line in pyproject.read_text().splitlines()
+        if not line.startswith("redundant-cast")
+    ]
+    pyproject.write_text("\n".join(kept) + "\n")
+    (root / "a.py").write_text(
+        "from typing import cast\n\n\ndef f(y: int) -> int:\n    return cast(int, y)\n"
+    )
+    capsys.readouterr()
+    code = main(["check", str(root / "a.py"), "--format", "json", "--only", "ty"])
+    findings = json.loads(capsys.readouterr().out)
+    assert code == 1
+    assert [(f["rule"], f["severity"]) for f in findings] == [
+        ("ty/redundant-cast", "error")
+    ]

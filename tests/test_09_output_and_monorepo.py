@@ -7,7 +7,14 @@ from pathspec import PathSpec
 from pyslop.cli import _exclude_spec, _is_excluded, main
 
 MONO = Path(__file__).parent / "fixtures" / "monorepo"
-MSG = "ast-grep/pyslop/fixture-marker Fixture marker for monorepo discovery test."
+MSG = "pyslop/fixture-marker Fixture marker for monorepo discovery test."
+
+
+@pytest.fixture(autouse=True)
+def _repo_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Findings show paths relative to the working dir; pin it so the
+    # expected lines below are literal.
+    monkeypatch.chdir(Path(__file__).parent.parent)
 
 
 def test_excluded_file_in_pkg_b_skipped_but_pkg_a_reported(
@@ -75,9 +82,9 @@ def test_text_output_grouped_by_file_with_summary_count(
         ]
     )
     assert capsys.readouterr().out.splitlines() == [
-        f"{MONO / 'pkg_a' / 'also_bad.py'}:1:5 {MSG}",
-        f"{MONO / 'pkg_a' / 'bad.py'}:1:5 {MSG}",
-        f"{MONO / 'pkg_a' / 'bad.py'}:3:5 {MSG}",
+        f"tests/fixtures/monorepo/pkg_a/also_bad.py:1:5 {MSG}",
+        f"tests/fixtures/monorepo/pkg_a/bad.py:1:5 {MSG}",
+        f"tests/fixtures/monorepo/pkg_a/bad.py:3:5 {MSG}",
         "3 findings (3 errors)",
     ]
     assert code == 1

@@ -35,19 +35,26 @@ def test_clean_file_exits_zero_with_empty_list(
 
 
 def test_no_ty_flag_skips_type_check(capsys: pytest.CaptureFixture[str]) -> None:
-    code = main(
-        [
-            "check",
-            str(FIXTURES / "bad.py"),
-            "--format",
-            "json",
-            "--only",
-            "ty",
-            "--no-ty",
-        ]
-    )
-    assert code == 0
-    assert json.loads(capsys.readouterr().out) == []
+    target = str(FIXTURES / "bad.py")
+    main(["check", target, "--format", "json"])
+    engines = {f["engine"] for f in json.loads(capsys.readouterr().out)}
+    assert "ty" in engines
+    main(["check", target, "--format", "json", "--no-ty"])
+    engines = {f["engine"] for f in json.loads(capsys.readouterr().out)}
+    assert "ty" not in engines
+
+
+@pytest.mark.parametrize(
+    "flags", [["--only", "ty", "--no-ty"], ["--fix", "--only", "ast-grep"]]
+)
+def test_flag_combos_that_run_nothing_fail_loudly(
+    flags: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(["check", str(FIXTURES / "bad.py"), "--format", "json", *flags])
+    out = capsys.readouterr()
+    assert code == 2
+    assert out.out == ""
+    assert out.err
 
 
 def test_mypy_config_left_alone(

@@ -1,7 +1,8 @@
 # ty config
 
 **Shipped config:** `src/pyslop/config/ty.toml` (bundled in the package, so it
-works with no vendored rules). Strict: every ty rule at `error`. The
+works with no vendored rules). Strict: `all = "error"`, so every ty rule is an
+error, including rules added in later ty releases. The
 `python-version = "3.12"` inside it describes the tool's own floor; it is
 never forced onto consumers (see below).
 
@@ -20,8 +21,12 @@ With no consumer ty config, pyslop adds only `--error all`: every rule,
 including ones added after the pin, is an error, while ty infers the floor
 natively from `requires-python`. No config file is ever forced, so the
 shipped strict `ty.toml` doubles only as the source `init` stamps rules
-from. `pyslop init` writes `[tool.ty.rules]` (strict, no `[environment]`),
-leaving the floor to native inference.
+from. `pyslop init` writes `[tool.ty.rules]` with `all = "error"` (no
+`[environment]`), leaving the floor to native inference. That keeps an init'd
+repo as strict as `--error all`: a per-rule entry overrides `all` whatever its
+position, so a downgrade is one extra line (with its reason comment). Repos
+init'd before v0.1.8 got one line per rule instead; add `all = "error"` to
+their `[tool.ty.rules]` to pick up rules from later ty releases.
 
 A diagnostics signal whose concise lines do not parse is a runner failure
 (exit 2), never a silent green: the reported count is cross-checked against
@@ -30,9 +35,8 @@ parsed findings.
 ## Beta status
 
 ty is pre-1.0 (`0.0.80`, pinned exactly in `pyproject.toml` and `uv.lock`).
-Its rule set still grows release to release. When the pin is bumped,
-regenerate the `[rules]` list in `src/pyslop/config/ty.toml` from
-`ty explain rule` so the shipped file keeps naming every rule explicitly.
+Its rule set still grows release to release; `all = "error"` picks up new
+rules on a pin bump with no list to regenerate.
 
 ## mypy coexists untouched
 
