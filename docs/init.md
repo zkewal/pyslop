@@ -18,4 +18,6 @@
 
 Existing keys are never overwritten: anything already present (a custom
 `[tool.ruff]`, an existing hook or workflow) is reported and skipped, and
-re-running `init` is a no-op.
+re-running `init` is a no-op. A standalone `ruff.toml` / `.ruff.toml` or
+`ty.toml` in the repo root also skips that tool's block: the tool reads its
+own file ahead of `pyproject.toml`, so the block would never apply.

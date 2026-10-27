@@ -2,8 +2,10 @@
 
 Pyslop ships a curated ruff config at `src/pyslop/config/ruff.toml` (bundled in
 the wheel like the rules). `pyslop check` passes it via `ruff --config` when
-the nearest `pyproject.toml` has no `[tool.ruff]` section; a consumer config
-always wins when present. Preview off, `target-version = "py312"`.
+the consumer has no ruff config of its own; a consumer config always wins
+when present. Discovery mirrors ruff's: walking up from the first checked
+path, a `.ruff.toml`, a `ruff.toml`, or a `pyproject.toml` with
+`[tool.ruff]` counts (a `pyproject.toml` without one does not stop the walk). Preview off, `target-version = "py312"`.
 
 Ruff carries the rules it already has so pyslop only adds the gaps via
 ast-grep. Families selected:

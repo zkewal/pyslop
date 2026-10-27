@@ -23,6 +23,7 @@ SAFETY_RULES = frozenset(
     }
 )
 SAFETY_RE = re.compile(r"#\s*SAFETY\s*:\s*\S")
+REPO_SPEC = "git+https://github.com/zkewal/pyslop"
 DEVIATION_RULE = "pyslop/deviation-needs-reason"
 URL_RE = re.compile(r"https?://\S")
 KEYVAL_RE = re.compile(r"^\s*(?P<key>[^=\s][^=]*?)\s*=\s*(?P<value>.*)$")
@@ -116,19 +117,24 @@ def _project_root(paths: list[str]) -> Path:
     return Path.cwd()
 
 
+def _has_tool_table(pyproject: Path, name: str) -> bool:
+    """True when pyproject.toml parses and has a [tool.<name>] table."""
+    try:
+        tool = tomllib.loads(pyproject.read_text()).get("tool", {})
+    except (OSError, tomllib.TOMLDecodeError):
+        return False
+    return isinstance(tool, dict) and name in tool
+
+
 def _consumer_ty_configured(root: Path) -> bool:
     """True when the project opts into ty config (ty.toml or [tool.ty]).
 
     `.ty.toml` is deliberately not detected: ty does not support it, so
     treating it as configuration would suppress strict defaults.
     """
-    if (root / "ty.toml").is_file():
-        return True
-    try:
-        tool = tomllib.loads((root / "pyproject.toml").read_text()).get("tool", {})
-    except (OSError, tomllib.TOMLDecodeError):
-        return False
-    return isinstance(tool, dict) and "ty" in tool
+    return (root / "ty.toml").is_file() or _has_tool_table(
+        root / "pyproject.toml", "ty"
+    )
 
 
 def run_ty(paths: list[str]) -> list[Finding] | None:
@@ -201,14 +207,24 @@ def _start(paths: list[str]) -> Path:
     return Path(paths[0]).resolve() if paths else Path.cwd()
 
 
+def _consumer_ruff_configured(start: Path) -> bool:
+    """True when ruff would find a consumer config walking up from start.
+
+    Mirrors ruff's own discovery: `.ruff.toml`, `ruff.toml`, or a
+    pyproject with [tool.ruff]; a pyproject without it does not stop the walk.
+    """
+    for candidate in walk_up(start):
+        if (candidate / ".ruff.toml").is_file() or (candidate / "ruff.toml").is_file():
+            return True
+        pyproject = candidate / "pyproject.toml"
+        if pyproject.is_file() and _has_tool_table(pyproject, "ruff"):
+            return True
+    return False
+
+
 def ruff_config_args(paths: list[str]) -> list[str]:
-    """--config shipped unless the nearest pyproject has [tool.ruff]."""
-    pyproject = nearest_pyproject(_start(paths))
-    try:
-        data = tomllib.loads(pyproject.read_text()) if pyproject else {}
-    except (OSError, tomllib.TOMLDecodeError):
-        return ["--config", str(shipped_ruff_config())]
-    if "ruff" in data.get("tool", {}):
+    """--config shipped unless the consumer has its own ruff config."""
+    if _consumer_ruff_configured(_start(paths)):
         return []
     return ["--config", str(shipped_ruff_config())]
 
@@ -298,7 +314,7 @@ def _pre_commit_entry(rev: str) -> str:
                 "        name: pyslop",
                 (
                     "        entry: uv tool run "
-                    f"--from git+https://github.com/zkewal/pyslop@{rev} "
+                    f"--from {REPO_SPEC}@{rev} "
                     "pyslop check --no-ty"
                 ),
                 "        language: system",
@@ -324,7 +340,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - name: Check for slop
-        run: uv tool run --from git+https://github.com/zkewal/pyslop@{rev} pyslop check
+        run: uv tool run --from {REPO_SPEC}@{rev} pyslop check
 """
 
 
@@ -385,12 +401,20 @@ def init_command(root: str) -> int:
     except tomllib.TOMLDecodeError as exc:
         emit_error(f"pyslop: cannot parse {pyproject}: {exc}")
         return 2
-    for key, block in (
-        ("pyslop", PYSLOP_BLOCK),
-        ("ruff", _embed_toml(shipped_ruff_config(), "tool.ruff")),
-        ("ty", _ty_rules_block()),
+    for key, block, own_files in (
+        ("pyslop", PYSLOP_BLOCK, ()),
+        (
+            "ruff",
+            _embed_toml(shipped_ruff_config(), "tool.ruff"),
+            (".ruff.toml", "ruff.toml"),
+        ),
+        ("ty", _ty_rules_block(), ("ty.toml",)),
     ):
-        if key in tool:
+        # The tool reads its own file ahead of pyproject, so a block here would be dead.
+        own = next((name for name in own_files if (base / name).is_file()), None)
+        if own is not None:
+            emit(f"pyslop: {own} already present, skipping [tool.{key}]")
+        elif key in tool:
             emit(f"pyslop: [tool.{key}] already present, skipping")
         else:
             _append_block(pyproject, block)

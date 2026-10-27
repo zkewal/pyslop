@@ -1,7 +1,7 @@
 [project]
 name = "pyslop"
 version = "0.1.7"
-description = "Add your description here"
+description = "Deterministic anti-slop toolkit for Python: ruff + ty + ast-grep, vendored evidence rules"
 readme = "README.md"
 authors = [
     { name = "Kewal", email = "z.kewal@gmail.com" }
@@ -16,6 +16,9 @@ dependencies = [
     "ruff==0.16.6",
     "ty==0.0.80",
 ]
+
+[project.urls]
+Repository = "https://github.com/zkewal/pyslop"
 
 [build-system]
 requires = ["uv_build>=0.11.31,<0.12.0"]
