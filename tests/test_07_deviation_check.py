@@ -211,6 +211,27 @@ def test_reason_without_url_is_not_enough(
     assert [f["line"] for f in findings] == [7]
 
 
+@pytest.mark.parametrize("reason_table", ["other", "pyslop"])
+def test_reason_belongs_to_the_disable_table(
+    reason_table: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    other_reason = f"# unrelated, {URL}\n" if reason_table == "other" else ""
+    rule_reason = f"# justified, {URL}\n" if reason_table == "pyslop" else ""
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.other.rules]\n"
+        f"{other_reason}"
+        '"pyslop/no-any" = "off"\n'
+        "[tool.pyslop.rules]\n"
+        f"{rule_reason}"
+        '"pyslop/no-any" = "off"\n'
+    )
+    code, findings = _check(capsys, tmp_path, "--only", "pyslop")
+    assert code == (1 if reason_table == "other" else 0)
+    assert [(f["rule"], f["line"]) for f in findings] == (
+        [(RULE, 5)] if reason_table == "other" else []
+    )
+
+
 def test_subpackage_disable_is_seen_from_monorepo_root(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -232,6 +253,8 @@ def test_subpackage_disable_is_seen_from_monorepo_root(
     [
         ('"pyslop/no-any" = "warning"', "unknown level"),
         ('E501 = "off"', "only applies to ast-grep rules"),
+        ('"ruff/E501" = "warn"', "only applies to ast-grep rules"),
+        ('"other/rule" = "error"', "only applies to ast-grep rules"),
         ('"ty/invalid-assignment" = "off"', "only applies to ast-grep rules"),
         (f'"{RULE}" = "off"', "only applies to ast-grep rules"),
     ],

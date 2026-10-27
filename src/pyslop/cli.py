@@ -487,6 +487,7 @@ class _Disable(NamedTuple):
     key: str  # TOML key as written: rule id, glob, or unknown pyslop key
     value: str | None  # value on the key's line, None when it is a list/table
     message: str
+    path: tuple[str | int, ...]  # parsed TOML path, including override index
     needs_reason: bool = True  # False: an error even with a reason comment
 
 
@@ -499,7 +500,9 @@ def _table(data: object, *keys: str) -> dict[str, object]:
     return {str(k): v for k, v in data.items()} if isinstance(data, dict) else {}
 
 
-def _pyslop_disables(pyslop: dict[str, object]) -> Iterator[_Disable]:
+def _pyslop_disables(
+    pyslop: dict[str, object], prefix: tuple[str, ...]
+) -> Iterator[_Disable]:
     for key in pyslop:
         if key not in PYSLOP_KEYS:
             yield _Disable(
@@ -507,6 +510,7 @@ def _pyslop_disables(pyslop: dict[str, object]) -> Iterator[_Disable]:
                 None,
                 f'Unknown [tool.pyslop] key "{key}" '
                 '(only "rules" and "exclude" are supported).',
+                (*prefix, key),
                 needs_reason=False,
             )
     for rule, value in _table(pyslop, "rules").items():
@@ -517,24 +521,31 @@ def _pyslop_disables(pyslop: dict[str, object]) -> Iterator[_Disable]:
                 str(value),
                 f'Rule "{rule}" has unknown level "{value}" '
                 '(use "off", "warn", or "error").',
+                (*prefix, "rules", rule),
                 needs_reason=False,
             )
-        elif "/" not in rule or rule.startswith("ty/") or rule == DEVIATION_RULE:
+        elif not rule.startswith("pyslop/") or rule == DEVIATION_RULE:
             yield _Disable(
                 rule,
                 str(value),
                 f'"{rule}" cannot be set in [tool.pyslop.rules]: it only '
                 "applies to ast-grep rules. Configure ruff and ty rules in "
                 "their own sections.",
+                (*prefix, "rules", rule),
                 needs_reason=False,
             )
         elif level == "off":
             yield _Disable(
-                rule, str(value), f'Rule "{rule}" is turned off without a reason.'
+                rule,
+                str(value),
+                f'Rule "{rule}" is turned off without a reason.',
+                (*prefix, "rules", rule),
             )
 
 
-def _ruff_disables(ruff: dict[str, object]) -> Iterator[_Disable]:
+def _ruff_disables(
+    ruff: dict[str, object], prefix: tuple[str, ...]
+) -> Iterator[_Disable]:
     for path in (
         ("lint", "per-file-ignores"),
         ("lint", "extend-per-file-ignores"),
@@ -547,47 +558,77 @@ def _ruff_disables(ruff: dict[str, object]) -> Iterator[_Disable]:
                 None,
                 f'per-file-ignores entry for "{glob}" '
                 "needs a reason and an issue link.",
+                (*prefix, *path, glob),
             )
 
 
-def _ty_rule_disables(rules: dict[str, object], where: str) -> Iterator[_Disable]:
+def _ty_rule_disables(
+    rules: dict[str, object], where: str, prefix: tuple[str | int, ...]
+) -> Iterator[_Disable]:
     for rule, value in rules.items():
         if str(value).lower() in ("warn", "ignore"):
             yield _Disable(
                 rule,
                 str(value),
                 f'{where} sets "{rule}" to "{value}" without a reason.',
+                (*prefix, "rules", rule),
             )
 
 
-def _ty_disables(ty: dict[str, object]) -> Iterator[_Disable]:
-    yield from _ty_rule_disables(_table(ty, "rules"), "ty rules")
+def _ty_disables(ty: dict[str, object], prefix: tuple[str, ...]) -> Iterator[_Disable]:
+    yield from _ty_rule_disables(_table(ty, "rules"), "ty rules", prefix)
     overrides = ty.get("overrides")
-    for override in overrides if isinstance(overrides, list) else []:
-        yield from _ty_rule_disables(_table(override, "rules"), "ty override")
+    for index, override in enumerate(overrides if isinstance(overrides, list) else []):
+        yield from _ty_rule_disables(
+            _table(override, "rules"), "ty override", (*prefix, "overrides", index)
+        )
 
 
 def _config_disables(config: Path, data: dict[str, object]) -> Iterator[_Disable]:
     """Disables in one parsed config, by file kind."""
     if config.name == "pyproject.toml":
-        yield from _pyslop_disables(_table(data, "tool", "pyslop"))
-        yield from _ruff_disables(_table(data, "tool", "ruff"))
-        yield from _ty_disables(_table(data, "tool", "ty"))
+        yield from _pyslop_disables(_table(data, "tool", "pyslop"), ("tool", "pyslop"))
+        yield from _ruff_disables(_table(data, "tool", "ruff"), ("tool", "ruff"))
+        yield from _ty_disables(_table(data, "tool", "ty"), ("tool", "ty"))
     elif config.name == "ty.toml":
-        yield from _ty_disables(data)
+        yield from _ty_disables(data, ())
     else:
-        yield from _ruff_disables(data)
+        yield from _ruff_disables(data, ())
+
+
+def _at_path(data: object, path: tuple[str | int, ...]) -> object:
+    """A parsed TOML value, or None when its path is absent (TOML has no null)."""
+    for part in path:
+        if isinstance(part, str) and isinstance(data, dict):
+            data = data.get(part)
+        elif isinstance(part, int) and isinstance(data, list) and part < len(data):
+            data = data[part]
+        else:
+            return None
+    return data
+
+
+def _probe_removes_path(lines: list[str], path: tuple[str | int, ...]) -> bool:
+    """True when a renamed source key was the key at this parsed TOML path."""
+    try:
+        changed = tomllib.loads("\n".join(lines))
+    except tomllib.TOMLDecodeError:
+        return False
+    return _at_path(changed, path) is None
 
 
 def _locate(
     lines: list[str], disable: _Disable, used: set[tuple[int, int]]
 ) -> tuple[int, int]:
-    """(line, col) of the first unused `key = [value]` spot, else (1, 1).
+    """(line, col) of this parsed key's source spot, else (1, 1).
 
-    tomllib gives no positions, so this finds the key text. It handles
-    tables, dotted keys, and inline tables. Where a key repeats, the first
-    unused spot in file order wins.
+    tomllib gives no positions. Rename each text match in memory and parse
+    again: only the match in the right table removes this disable's path.
+    This also handles dotted keys, inline tables, and repeated override keys.
     """
+    probe_key = "__pyslop_location_probe__"
+    while probe_key in "\n".join(lines):
+        probe_key += "_"
     value = (
         "" if disable.value is None else rf"""\s*["']{re.escape(disable.value)}["']"""
     )
@@ -599,7 +640,13 @@ def _locate(
             continue
         for match in pattern.finditer(raw):
             spot = (lineno, match.start("key") + 1)
-            if spot not in used:
+            if spot in used:
+                continue
+            probe = lines.copy()
+            probe[lineno - 1] = (
+                raw[: match.start("key")] + f'"{probe_key}"' + raw[match.end("key") :]
+            )
+            if _probe_removes_path(probe, disable.path):
                 used.add(spot)
                 return spot
     return 1, 1
