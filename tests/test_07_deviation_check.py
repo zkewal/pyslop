@@ -232,6 +232,8 @@ def test_subpackage_disable_is_seen_from_monorepo_root(
     [
         ('"pyslop/no-any" = "warning"', "unknown level"),
         ('E501 = "off"', "only applies to ast-grep rules"),
+        ('"ruff/E501" = "warn"', "only applies to ast-grep rules"),
+        ('"other/rule" = "error"', "only applies to ast-grep rules"),
         ('"ty/invalid-assignment" = "off"', "only applies to ast-grep rules"),
         (f'"{RULE}" = "off"', "only applies to ast-grep rules"),
     ],

@@ -519,7 +519,7 @@ def _pyslop_disables(pyslop: dict[str, object]) -> Iterator[_Disable]:
                 '(use "off", "warn", or "error").',
                 needs_reason=False,
             )
-        elif "/" not in rule or rule.startswith("ty/") or rule == DEVIATION_RULE:
+        elif not rule.startswith("pyslop/") or rule == DEVIATION_RULE:
             yield _Disable(
                 rule,
                 str(value),
