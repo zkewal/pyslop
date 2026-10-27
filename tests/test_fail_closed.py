@@ -19,6 +19,8 @@ GREP_ITEM = {
 BROKEN = {
     "ruff-crash": ("ruff", 2, ""),
     "ruff-bad-json": ("ruff", 1, "not json"),
+    "ruff-empty-output": ("ruff", 1, ""),
+    "ruff-empty-list": ("ruff", 1, "[]"),
     "ty-crash": ("ty", 2, ""),
     "ty-summary-mismatch": (
         "ty",
