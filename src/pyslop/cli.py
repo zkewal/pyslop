@@ -517,6 +517,7 @@ def _pyslop_disables(pyslop: dict[str, object]) -> Iterator[_Disable]:
                 str(value),
                 f'Rule "{rule}" has unknown level "{value}" '
                 '(use "off", "warn", or "error").',
+                (*prefix, "rules", rule),
                 needs_reason=False,
             )
         elif not rule.startswith("pyslop/") or rule == DEVIATION_RULE:
@@ -526,6 +527,7 @@ def _pyslop_disables(pyslop: dict[str, object]) -> Iterator[_Disable]:
                 f'"{rule}" cannot be set in [tool.pyslop.rules]: it only '
                 "applies to ast-grep rules. Configure ruff and ty rules in "
                 "their own sections.",
+                (*prefix, "rules", rule),
                 needs_reason=False,
             )
         elif level == "off":
