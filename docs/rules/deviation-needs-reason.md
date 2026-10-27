@@ -14,15 +14,20 @@ itself in place.
 
 ## What is checked
 
-`pyslop check` reads the nearest `pyproject.toml` for each checked path and
-flags:
+`pyslop check` reads `pyproject.toml`, `ruff.toml`, `.ruff.toml`, and
+`ty.toml` beside checked paths and in their parent directories up to the
+nearest `pyproject.toml`. When checking a directory, it also reads configs
+in its subdirectories, including monorepo subpackages. It flags:
 
 1. `[tool.pyslop.rules]` entries set to `"off"` (table form or inline
    `rules = { ... }`, single- or multi-line, dotted `rules."id" = "off"`).
-2. Every `[tool.ruff.lint.per-file-ignores]` entry (any entry ignores rules
-   for those paths).
-3. `[[tool.ty.overrides]]` rule downgrades to `"warn"` or `"ignore"`
-   (inline or dotted form). `"error"` is not a downgrade.
+2. Ruff `per-file-ignores` and `extend-per-file-ignores` entries in
+   `pyproject.toml`, `ruff.toml`, or `.ruff.toml`, including the older
+   `[tool.ruff.per-file-ignores]` spelling. A global `ignore` or shorter
+   `select` is a profile choice and is not flagged.
+3. Ty rule downgrades to `"warn"` or `"ignore"` in `rules` or `overrides`,
+   in `pyproject.toml` or `ty.toml` (inline or dotted form). `"error"` is
+   not a downgrade.
 4. Unknown `[tool.pyslop]` keys — only `rules` and `exclude` are supported.
 
 Justified means the TOML line **directly above** the entry is a `#` comment
@@ -63,10 +68,8 @@ findings are dropped for every engine.
 
 ## Notes
 
-- The finding's `file` is the `pyproject.toml` itself, `line`/`col` point at
-  the offending entry.
-- Only `pyproject.toml` files are read. A `ruff.toml`
-  `[lint.per-file-ignores]` section is out of scope for this check.
+- The finding's `file` is the config file itself; `line`/`col` point at the
+  offending entry.
 - `--only pyslop` runs just this check; `--only ast-grep|ruff|ty` skips it.
 - Unknown rule *ids* inside `rules` are ignored (only unknown *keys* of
   `[tool.pyslop]` are errors); non-`error|warn|off` severity values leave the
