@@ -73,3 +73,22 @@ def test_coded_ignores_with_reasons_exit_zero(
     )
     assert code == 0
     assert json.loads(capsys.readouterr().out) == []
+
+
+def test_safety_comment_covers_only_its_own_escape_hatch(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = tmp_path / "a.py"
+    target.write_text(
+        "from typing import cast\n"
+        "a = cast(int, 1)  # SAFETY: trailing comment covers this line only\n"
+        "b = cast(int, 2)\n"
+        's = "# SAFETY: text in a string is not a comment"\n'
+        "c = cast(int, 3)\n"
+        "# SAFETY: a standalone comment covers the next line\n"
+        "d = cast(int, 4)\n"
+    )
+    code = main(["check", str(target), "--format", "json", "--only", "ast-grep"])
+    findings = json.loads(capsys.readouterr().out)
+    assert code == 1
+    assert [f["line"] for f in findings] == [3, 5]
