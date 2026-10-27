@@ -275,6 +275,9 @@ def run_ruff(paths: list[str], *, fix: bool) -> tuple[list[Finding], int]:
     except json.JSONDecodeError:
         emit_error(f"pyslop: could not parse ruff output:\n{proc.stderr}")
         return [], 2
+    if proc.returncode == 1 and not raw:
+        emit_error("pyslop: ruff signaled findings but emitted none")
+        return [], 2
     return [
         {
             "engine": "ruff",
