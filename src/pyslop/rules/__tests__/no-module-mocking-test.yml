@@ -48,6 +48,8 @@ invalid:
   - |
     patch.multiple("my.module", func=DEFAULT)
   - |
+    patch.multiple(target="my.module", func=DEFAULT)
+  - |
     mock.patch.multiple("my.module", func=DEFAULT)
   - |
     monkeypatch.delattr("my.module.func")
