@@ -189,6 +189,20 @@ def test_render_rejects_bad_input(
                 }
             ]
         ),
+        json.dumps(
+            [
+                {
+                    "engine": "ast-grep",
+                    "rule": "pyslop/fixture-marker",
+                    "file": "pkg_a/bad.py",
+                    "line": 1,
+                    "col": True,
+                    "message": MSG,
+                    "fix_hint": "",
+                    "severity": "error",
+                }
+            ]
+        ),
     ]
     for payload in bad:
         code, out, err = _render(monkeypatch, capsys, payload, ["--format", "github"])
@@ -210,3 +224,28 @@ def test_check_render_equivalence(
     assert code == 1
     assert rendered == direct
     assert rendered.splitlines() == EXPECTED
+
+
+def test_render_text_and_json_formats(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    finding = {
+        "engine": "ast-grep",
+        "rule": "pyslop/fixture-marker",
+        "file": "pkg_a/bad.py",
+        "line": 1,
+        "col": 5,
+        "message": MSG,
+        "fix_hint": "",
+        "severity": "error",
+    }
+    payload = json.dumps([finding])
+    code, out, _ = _render(monkeypatch, capsys, payload, ["--format", "text"])
+    assert code == 1
+    assert out.splitlines() == [
+        f"pkg_a/bad.py:1:5 pyslop/fixture-marker {MSG}",
+        "1 finding (1 error)",
+    ]
+    code, out, _ = _render(monkeypatch, capsys, payload, ["--format", "json"])
+    assert code == 1
+    assert json.loads(out) == [finding]

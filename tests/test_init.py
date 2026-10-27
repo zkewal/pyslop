@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+import pyslop.cli
 from pyslop.cli import main
 
 FIXTURES = Path(__file__).parent / "fixtures" / "init"
@@ -30,13 +31,18 @@ def test_init_vendors_rules_and_writes_all_blocks(
     code = main(["init", str(root)])
     capsys.readouterr()
     assert code == 0
-    assert (root / "tools" / "pyslop" / "rules" / "sgconfig.yml").is_file()
-    assert list((root / "tools" / "pyslop" / "rules" / "pyslop").glob("*.yml"))
+    vendored = root / "tools" / "pyslop" / "rules"
+    assert (vendored / "sgconfig.yml").is_file()
+    bundled = Path(pyslop.cli.__file__).parent / "rules" / "pyslop"
+    assert sorted(p.name for p in (vendored / "pyslop").glob("*.yml")) == sorted(
+        p.name for p in bundled.glob("*.yml")
+    )
     text = (root / "pyproject.toml").read_text()
     assert "[tool.pyslop]" in text
     assert "[tool.ruff]" in text
     assert "[tool.ty.rules]" in text
-    assert "pyslop" in (root / ".pre-commit-config.yaml").read_text()
+    hook = (root / ".pre-commit-config.yaml").read_text()
+    assert f"pyslop@v{version('pyslop')} pyslop check --no-ty" in hook
     workflow = root / ".github" / "workflows" / "pyslop.yml"
     assert workflow.is_file()
     assert f"pyslop@v{version('pyslop')}" in workflow.read_text()

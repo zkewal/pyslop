@@ -275,6 +275,9 @@ def run_ruff(paths: list[str], *, fix: bool) -> tuple[list[Finding], int]:
     except json.JSONDecodeError:
         emit_error(f"pyslop: could not parse ruff output:\n{proc.stderr}")
         return [], 2
+    if proc.returncode == 1 and not raw:
+        emit_error("pyslop: ruff signaled findings but emitted none")
+        return [], 2
     return [
         {
             "engine": "ruff",
@@ -418,12 +421,6 @@ def _ty_rules_block() -> str:
 
 def init_command(root: str) -> int:
     base = Path(root).resolve()
-    vendored = base / "tools" / "pyslop" / "rules"
-    if vendored.is_dir():
-        emit(f"pyslop: {vendored} already present, skipping")
-    else:
-        shutil.copytree(bundled_rules_dir(), vendored)
-        emit(f"pyslop: vendored rules to {vendored}")
     pyproject = base / "pyproject.toml"
     try:
         tool = (
@@ -434,6 +431,12 @@ def init_command(root: str) -> int:
     except tomllib.TOMLDecodeError as exc:
         emit_error(f"pyslop: cannot parse {pyproject}: {exc}")
         return 2
+    vendored = base / "tools" / "pyslop" / "rules"
+    if vendored.is_dir():
+        emit(f"pyslop: {vendored} already present, skipping")
+    else:
+        shutil.copytree(bundled_rules_dir(), vendored)
+        emit(f"pyslop: vendored rules to {vendored}")
     for key, block, own_files in (
         ("pyslop", PYSLOP_BLOCK, ()),
         (
