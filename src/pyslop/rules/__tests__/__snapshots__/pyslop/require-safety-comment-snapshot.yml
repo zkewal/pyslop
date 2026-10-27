@@ -9,6 +9,30 @@ snapshots:
       start: 28
       end: 42
   ? |
+    import typing
+    x = typing.cast(int, "1")
+  : labels:
+    - source: typing.cast(int, "1")
+      style: primary
+      start: 18
+      end: 39
+  ? |
+    import typing as t
+    x = t.cast(int, "1")
+  : labels:
+    - source: t.cast(int, "1")
+      style: primary
+      start: 23
+      end: 39
+  ? |
+    import typing_extensions
+    x = typing_extensions.cast(int, "1")
+  : labels:
+    - source: typing_extensions.cast(int, "1")
+      style: primary
+      start: 29
+      end: 61
+  ? |
     x = 1  # ty: ignore[invalid-assignment]
   : labels:
     - source: '# ty: ignore[invalid-assignment]'

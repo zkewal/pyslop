@@ -47,12 +47,17 @@ def _forward(**kwargs):
     return _build(**kwargs)
 ```
 
-An `Unpack[SomeTypedDict]` annotation (or `typing.Unpack`) satisfies the rule,
-as does a private name starting with `_`. `async def` follows the same rules.
+An `Unpack[SomeTypedDict]` annotation satisfies the rule, module-qualified
+(`typing.Unpack`, `t.Unpack`, `typing_extensions.Unpack`) or quoted
+(`"Unpack[TD]"`). So does a private name starting with `_`. Dunders such as
+`__init__` and `__call__` are public: they are how callers construct and call
+the object, so they are checked. `async def` follows the same rules.
 
 ## Notes
 
-- Both `def` and `async def` are matched; the `def $F` pattern covers both.
+- Both `def` and `async def` are matched: both are `function_definition`
+  nodes. The rule is structural: it looks for a `**` parameter in a public
+  function's `parameters` and checks its annotation text.
 - Return annotations do not exempt a signature: typed `**kwargs` with
   `-> ...` is matched, and `Unpack[...]` / `P.kwargs` exemptions cover it too.
 - `**kwargs: P.kwargs` (any ParamSpec name) is exempt: a ParamSpec-annotated

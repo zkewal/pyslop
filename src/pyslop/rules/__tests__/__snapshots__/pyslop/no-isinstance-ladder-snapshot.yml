@@ -92,3 +92,105 @@ snapshots:
       style: secondary
       start: 104
       end: 147
+  ? |
+    def f(x):
+        if x is None:
+            return 0
+        elif isinstance(x, int):
+            return 1
+        elif isinstance(x, str):
+            return 2
+        elif isinstance(x, float):
+            return 3
+        return 0
+  : labels:
+    - source: |-
+        if x is None:
+                return 0
+            elif isinstance(x, int):
+                return 1
+            elif isinstance(x, str):
+                return 2
+            elif isinstance(x, float):
+                return 3
+      style: primary
+      start: 14
+      end: 184
+    - source: isinstance(x, float)
+      style: secondary
+      start: 146
+      end: 166
+    - source: isinstance(x, str)
+      style: secondary
+      start: 100
+      end: 118
+    - source: isinstance(x, int)
+      style: secondary
+      start: 54
+      end: 72
+    - source: |-
+        elif isinstance(x, int):
+                return 1
+      style: secondary
+      start: 49
+      end: 90
+    - source: |-
+        elif isinstance(x, str):
+                return 2
+      style: secondary
+      start: 95
+      end: 136
+    - source: |-
+        elif isinstance(x, float):
+                return 3
+      style: secondary
+      start: 141
+      end: 184
+  ? |
+    def f(x, y):
+        if isinstance(x, int):
+            return 1
+        elif isinstance(y, str):
+            return 2
+        elif isinstance(x, str):
+            return 3
+        elif isinstance(x, float):
+            return 4
+        return 0
+  : labels:
+    - source: |-
+        if isinstance(x, int):
+                return 1
+            elif isinstance(y, str):
+                return 2
+            elif isinstance(x, str):
+                return 3
+            elif isinstance(x, float):
+                return 4
+      style: primary
+      start: 17
+      end: 196
+    - source: isinstance(x, int)
+      style: secondary
+      start: 20
+      end: 38
+    - source: isinstance(x, float)
+      style: secondary
+      start: 158
+      end: 178
+    - source: isinstance(x, str)
+      style: secondary
+      start: 112
+      end: 130
+    - source: |-
+        elif isinstance(x, str):
+                return 3
+      style: secondary
+      start: 107
+      end: 148
+    - source: |-
+        elif isinstance(x, float):
+                return 4
+      style: secondary
+      start: 153
+      end: 196

@@ -16,6 +16,23 @@ valid:
   - |
     def foo(x: dict):
         pass
+  - |
+    from typing import Any, Callable
+    def foo(f: Callable[[dict[str, int]], Any]) -> tuple[dict[str, int], Any]:
+        pass
+  - |
+    from typing import Any
+    class K:
+        def m(self):
+            local: dict[str, Any] = {}
+            return local
+  - |
+    from typing import Any
+    def outer():
+        def inner():
+            local: dict[str, Any] = {}
+            return local
+        return inner
 invalid:
   - |
     from typing import Any
@@ -34,3 +51,31 @@ invalid:
     import typing
     def foo(x: typing.Dict[str, Any]):
         pass
+  - |
+    import typing
+    def foo(x: typing.Mapping[str, typing.Any]):
+        pass
+  - |
+    import collections.abc
+    from typing import Any
+    def foo(x: collections.abc.Mapping[str, Any]):
+        pass
+  - |
+    import typing
+    def foo(x: dict[str, typing.Any]):
+        pass
+  - |
+    from typing import Any, MutableMapping
+    def foo(x: MutableMapping[str, Any]):
+        pass
+  - |
+    from typing import Any
+    class K:
+        def m(self, x: dict[str, Any]) -> dict[str, Any]:
+            return x
+  - |
+    from typing import Any, Mapping
+    def outer():
+        def inner(x: Mapping[str, Any]):
+            pass
+        return inner

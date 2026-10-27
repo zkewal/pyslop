@@ -1,24 +1,36 @@
 id: pyslop/no-isinstance-ladder
 language: python
 severity: error
+# Three isinstance($X, ...) branch conditions anywhere in one if/elif chain.
+# Branches in between (other subjects, `x is None`, plain tests) do not break
+# the chain. Either the `if` plus two elifs, or three elifs.
+utils:
+  elif-isinstance-x:
+    kind: elif_clause
+    has:
+      field: condition
+      pattern: isinstance($X, $_)
 rule:
   all:
     - kind: if_statement
-    - has:
-        field: condition
-        pattern: isinstance($X, $A)
-    - has:
-        all:
-          - kind: elif_clause
-          - has:
-              field: condition
-              pattern: isinstance($X, $B)
-          - follows:
-              all:
-                - kind: elif_clause
-                - has:
-                    field: condition
-                    pattern: isinstance($X, $C)
+    - any:
+        - all:
+            - has:
+                field: condition
+                pattern: isinstance($X, $_)
+            - has:
+                matches: elif-isinstance-x
+                follows:
+                  stopBy: end
+                  matches: elif-isinstance-x
+        - has:
+            matches: elif-isinstance-x
+            follows:
+              stopBy: end
+              matches: elif-isinstance-x
+              follows:
+                stopBy: end
+                matches: elif-isinstance-x
 constraints:
   X:
     kind: identifier

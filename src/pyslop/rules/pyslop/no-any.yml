@@ -3,11 +3,30 @@ language: python
 severity: error
 rule:
   any:
-    - pattern: Any
+    # Bare `Any`, except: imports, the attribute half of `x.Any` (so
+    # `typing.Any` is one finding and `obj.Any` none), and a name being
+    # defined (`Any = 3`, `def Any`, `class Any`).
+    # `from typing import Any as A` needs alias resolution: not covered.
+    - kind: identifier
+      regex: "^Any$"
       not:
-        inside:
-          kind: import_from_statement
-          stopBy: end
-    - pattern: typing.Any
+        any:
+          - inside:
+              kind: import_from_statement
+              stopBy: end
+          - inside:
+              kind: attribute
+              field: attribute
+          - inside:
+              kind: assignment
+              field: left
+          - inside:
+              kind: function_definition
+              field: name
+          - inside:
+              kind: class_definition
+              field: name
+    - kind: attribute
+      regex: "^(typing|t|tp|typing_extensions)\\.Any$"
 message: Explicit Any without a SAFETY justification.
 note: "Add `# SAFETY: <reason>` on the same or the immediately preceding line, or replace Any with a concrete type."

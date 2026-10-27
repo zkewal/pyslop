@@ -46,3 +46,25 @@ invalid:
         elif isinstance(x, bool):
             return 4
         return 0
+  - |
+    def f(x):
+        if x is None:
+            return 0
+        elif isinstance(x, int):
+            return 1
+        elif isinstance(x, str):
+            return 2
+        elif isinstance(x, float):
+            return 3
+        return 0
+  - |
+    def f(x, y):
+        if isinstance(x, int):
+            return 1
+        elif isinstance(y, str):
+            return 2
+        elif isinstance(x, str):
+            return 3
+        elif isinstance(x, float):
+            return 4
+        return 0

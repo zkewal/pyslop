@@ -2,25 +2,28 @@ id: pyslop/no-kwargs-passthrough
 language: python
 severity: error
 rule:
-  any:
-    - pattern: "def $F($$$, **$KW): $$$BODY"
-    - pattern: "def $F($$$, **$KW) -> $R: $$$BODY"
-    - all:
-        - pattern: "def $F($$$, **$KW: $TYPE): $$$BODY"
-        - not:
-            any:
-              - pattern: "def $F($$$, **$KW: Unpack[$$$]): $$$BODY"
-              - pattern: "def $F($$$, **$KW: typing.Unpack[$$$]): $$$BODY"
-              - pattern: "def $F($$$, **$KW: $P.kwargs): $$$BODY"
-    - all:
-        - pattern: "def $F($$$, **$KW: $TYPE) -> $R: $$$BODY"
-        - not:
-            any:
-              - pattern: "def $F($$$, **$KW: Unpack[$$$]) -> $R2: $$$BODY"
-              - pattern: "def $F($$$, **$KW: typing.Unpack[$$$]) -> $R2: $$$BODY"
-              - pattern: "def $F($$$, **$KW: $P.kwargs) -> $R2: $$$BODY"
-constraints:
-  F:
-    regex: "^[^_]"
+  kind: function_definition
+  all:
+    # Public: no leading underscore, or a dunder (`__init__`, `__call__`).
+    - has:
+        field: name
+        regex: "^([^_]|__\\w*__$)"
+    - has:
+        field: parameters
+        has:
+          any:
+            # **kwargs with no annotation
+            - kind: dictionary_splat_pattern
+            # **kwargs: T where T is not Unpack[...] or P.kwargs. Unpack may be
+            # module-qualified (typing., t., typing_extensions.) or quoted.
+            - kind: typed_parameter
+              has:
+                kind: dictionary_splat_pattern
+              not:
+                has:
+                  field: type
+                  any:
+                    - regex: "^[\"']?(\\w+\\.)*Unpack\\[.+\\][\"']?$"
+                    - regex: "^[\"']?\\w+\\.kwargs[\"']?$"
 message: Public function takes **kwargs without a typed contract.
 note: "Annotate as **kwargs: Unpack[SomeTypedDict] (or ParamSpec P.kwargs for signature-preserving forwarders) or make the function private (_name). Parse at the boundary instead of passing **kwargs through."

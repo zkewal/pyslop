@@ -10,6 +10,22 @@ snapshots:
       style: primary
       start: 0
       end: 48
+    - source: bar
+      style: secondary
+      start: 10
+      end: 13
+    - source: '**kwargs'
+      style: secondary
+      start: 17
+      end: 25
+    - source: '**kwargs: int'
+      style: secondary
+      start: 17
+      end: 30
+    - source: '**kwargs: int'
+      style: secondary
+      start: 17
+      end: 30
   ? |
     async def foo(**kwargs) -> int:
         pass
@@ -20,6 +36,18 @@ snapshots:
       style: primary
       start: 0
       end: 40
+    - source: foo
+      style: secondary
+      start: 10
+      end: 13
+    - source: '**kwargs'
+      style: secondary
+      start: 14
+      end: 22
+    - source: '**kwargs'
+      style: secondary
+      start: 14
+      end: 22
   ? |
     async def foo(**kwargs):
         pass
@@ -30,6 +58,64 @@ snapshots:
       style: primary
       start: 0
       end: 33
+    - source: foo
+      style: secondary
+      start: 10
+      end: 13
+    - source: '**kwargs'
+      style: secondary
+      start: 14
+      end: 22
+    - source: '**kwargs'
+      style: secondary
+      start: 14
+      end: 22
+  ? |
+    class K:
+        def __call__(self, *args, **kwargs) -> int:
+            pass
+  : labels:
+    - source: |-
+        def __call__(self, *args, **kwargs) -> int:
+                pass
+      style: primary
+      start: 13
+      end: 69
+    - source: __call__
+      style: secondary
+      start: 17
+      end: 25
+    - source: '**kwargs'
+      style: secondary
+      start: 39
+      end: 47
+    - source: '**kwargs'
+      style: secondary
+      start: 39
+      end: 47
+  ? |
+    class K:
+        def __init__(self, **kwargs):
+            pass
+  : labels:
+    - source: |-
+        def __init__(self, **kwargs):
+                pass
+      style: primary
+      start: 13
+      end: 55
+    - source: __init__
+      style: secondary
+      start: 17
+      end: 25
+    - source: '**kwargs'
+      style: secondary
+      start: 32
+      end: 40
+    - source: '**kwargs'
+      style: secondary
+      start: 32
+      end: 40
   ? |
     def bar(x: int, **kwargs: int) -> None:
         pass
@@ -40,6 +126,22 @@ snapshots:
       style: primary
       start: 0
       end: 48
+    - source: bar
+      style: secondary
+      start: 4
+      end: 7
+    - source: '**kwargs'
+      style: secondary
+      start: 16
+      end: 24
+    - source: '**kwargs: int'
+      style: secondary
+      start: 16
+      end: 29
+    - source: '**kwargs: int'
+      style: secondary
+      start: 16
+      end: 29
   ? |
     def bar(x: int, **kwargs: int):
         pass
@@ -50,6 +152,22 @@ snapshots:
       style: primary
       start: 0
       end: 40
+    - source: bar
+      style: secondary
+      start: 4
+      end: 7
+    - source: '**kwargs'
+      style: secondary
+      start: 16
+      end: 24
+    - source: '**kwargs: int'
+      style: secondary
+      start: 16
+      end: 29
+    - source: '**kwargs: int'
+      style: secondary
+      start: 16
+      end: 29
   ? |
     def foo(**kwargs) -> None:
         pass
@@ -60,6 +178,18 @@ snapshots:
       style: primary
       start: 0
       end: 35
+    - source: foo
+      style: secondary
+      start: 4
+      end: 7
+    - source: '**kwargs'
+      style: secondary
+      start: 8
+      end: 16
+    - source: '**kwargs'
+      style: secondary
+      start: 8
+      end: 16
   ? |
     def foo(**kwargs):
         pass
@@ -70,6 +200,44 @@ snapshots:
       style: primary
       start: 0
       end: 27
+    - source: foo
+      style: secondary
+      start: 4
+      end: 7
+    - source: '**kwargs'
+      style: secondary
+      start: 8
+      end: 16
+    - source: '**kwargs'
+      style: secondary
+      start: 8
+      end: 16
+  ? |
+    def foo(**kwargs: "Any"):
+        pass
+  : labels:
+    - source: |-
+        def foo(**kwargs: "Any"):
+            pass
+      style: primary
+      start: 0
+      end: 34
+    - source: foo
+      style: secondary
+      start: 4
+      end: 7
+    - source: '**kwargs'
+      style: secondary
+      start: 8
+      end: 16
+    - source: '**kwargs: "Any"'
+      style: secondary
+      start: 8
+      end: 23
+    - source: '**kwargs: "Any"'
+      style: secondary
+      start: 8
+      end: 23
   ? |
     def method(self, x: int, **kwargs):
         pass
@@ -80,6 +248,18 @@ snapshots:
       style: primary
       start: 0
       end: 44
+    - source: method
+      style: secondary
+      start: 4
+      end: 10
+    - source: '**kwargs'
+      style: secondary
+      start: 25
+      end: 33
+    - source: '**kwargs'
+      style: secondary
+      start: 25
+      end: 33
   ? |
     def update_tour(tour_id: int, **kwargs: Any) -> None:
         pass
@@ -90,3 +270,19 @@ snapshots:
       style: primary
       start: 0
       end: 62
+    - source: update_tour
+      style: secondary
+      start: 4
+      end: 15
+    - source: '**kwargs'
+      style: secondary
+      start: 30
+      end: 38
+    - source: '**kwargs: Any'
+      style: secondary
+      start: 30
+      end: 43
+    - source: '**kwargs: Any'
+      style: secondary
+      start: 30
+      end: 43

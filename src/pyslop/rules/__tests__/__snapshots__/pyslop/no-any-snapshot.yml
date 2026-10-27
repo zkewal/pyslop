@@ -17,3 +17,11 @@ snapshots:
       style: primary
       start: 28
       end: 38
+  ? |
+    import typing as t
+    x: t.Any = 1
+  : labels:
+    - source: t.Any
+      style: primary
+      start: 22
+      end: 27

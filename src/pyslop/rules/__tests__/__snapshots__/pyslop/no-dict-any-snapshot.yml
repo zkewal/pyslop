@@ -2,6 +2,24 @@ id: pyslop/no-dict-any
 snapshots:
   ? |
     from typing import Any
+    class K:
+        def m(self, x: dict[str, Any]) -> dict[str, Any]:
+            return x
+  : labels:
+    - source: dict[str, Any]
+      style: primary
+      start: 51
+      end: 65
+    - source: 'x: dict[str, Any]'
+      style: secondary
+      start: 48
+      end: 65
+    - source: dict[str, Any]
+      style: secondary
+      start: 51
+      end: 65
+  ? |
+    from typing import Any
     def foo() -> dict[str, Any]:
         return {}
   : labels:
@@ -15,6 +33,10 @@ snapshots:
       style: secondary
       start: 23
       end: 65
+    - source: dict[str, Any]
+      style: secondary
+      start: 36
+      end: 50
   ? |
     from typing import Any
     def foo(x: dict[str, Any]):
@@ -24,12 +46,14 @@ snapshots:
       style: primary
       start: 34
       end: 48
-    - source: |-
-        def foo(x: dict[str, Any]):
-            pass
+    - source: 'x: dict[str, Any]'
       style: secondary
-      start: 23
-      end: 59
+      start: 31
+      end: 48
+    - source: dict[str, Any]
+      style: secondary
+      start: 34
+      end: 48
   ? |
     from typing import Any
     import typing
@@ -40,12 +64,14 @@ snapshots:
       style: primary
       start: 48
       end: 69
-    - source: |-
-        def foo(x: typing.Dict[str, Any]):
-            pass
+    - source: 'x: typing.Dict[str, Any]'
       style: secondary
-      start: 37
-      end: 80
+      start: 45
+      end: 69
+    - source: typing.Dict[str, Any]
+      style: secondary
+      start: 48
+      end: 69
   ? |
     from typing import Any, Mapping
     def foo(x: Mapping[str, Any]):
@@ -55,9 +81,99 @@ snapshots:
       style: primary
       start: 43
       end: 60
-    - source: |-
-        def foo(x: Mapping[str, Any]):
-            pass
+    - source: 'x: Mapping[str, Any]'
       style: secondary
-      start: 32
-      end: 71
+      start: 40
+      end: 60
+    - source: Mapping[str, Any]
+      style: secondary
+      start: 43
+      end: 60
+  ? |
+    from typing import Any, Mapping
+    def outer():
+        def inner(x: Mapping[str, Any]):
+            pass
+        return inner
+  : labels:
+    - source: Mapping[str, Any]
+      style: primary
+      start: 62
+      end: 79
+    - source: 'x: Mapping[str, Any]'
+      style: secondary
+      start: 59
+      end: 79
+    - source: Mapping[str, Any]
+      style: secondary
+      start: 62
+      end: 79
+  ? |
+    from typing import Any, MutableMapping
+    def foo(x: MutableMapping[str, Any]):
+        pass
+  : labels:
+    - source: MutableMapping[str, Any]
+      style: primary
+      start: 50
+      end: 74
+    - source: 'x: MutableMapping[str, Any]'
+      style: secondary
+      start: 47
+      end: 74
+    - source: MutableMapping[str, Any]
+      style: secondary
+      start: 50
+      end: 74
+  ? |
+    import collections.abc
+    from typing import Any
+    def foo(x: collections.abc.Mapping[str, Any]):
+        pass
+  : labels:
+    - source: collections.abc.Mapping[str, Any]
+      style: primary
+      start: 57
+      end: 90
+    - source: 'x: collections.abc.Mapping[str, Any]'
+      style: secondary
+      start: 54
+      end: 90
+    - source: collections.abc.Mapping[str, Any]
+      style: secondary
+      start: 57
+      end: 90
+  ? |
+    import typing
+    def foo(x: dict[str, typing.Any]):
+        pass
+  : labels:
+    - source: dict[str, typing.Any]
+      style: primary
+      start: 25
+      end: 46
+    - source: 'x: dict[str, typing.Any]'
+      style: secondary
+      start: 22
+      end: 46
+    - source: dict[str, typing.Any]
+      style: secondary
+      start: 25
+      end: 46
+  ? |
+    import typing
+    def foo(x: typing.Mapping[str, typing.Any]):
+        pass
+  : labels:
+    - source: typing.Mapping[str, typing.Any]
+      style: primary
+      start: 25
+      end: 56
+    - source: 'x: typing.Mapping[str, typing.Any]'
+      style: secondary
+      start: 22
+      end: 56
+    - source: typing.Mapping[str, typing.Any]
+      style: secondary
+      start: 25
+      end: 56

@@ -48,6 +48,11 @@ a `SAFETY` comment separated by a blank line does not count. The import that pro
   SAFETY comment does not satisfy ruff. Keep both: the SAFETY reason for
   review, `# noqa: ANN401` for ruff (the shipped config keeps ANN401 on
   purpose, see `docs/config/ruff.md`).
+- `typing.Any` (also `t.Any`, `tp.Any`, `typing_extensions.Any`) is one
+  finding, not two. `obj.Any` on any other object is not flagged, and neither
+  is a name you define yourself (`Any = 3`, `def Any()`, `class Any`).
+- An aliased import (`from typing import Any as A`) is not caught: that needs
+  alias resolution, which ast-grep YAML cannot do.
 - `pyslop/require-safety-comment` covers casts and typed ignores. Keeping the
   rules separate lets teams adopt those sharper escape hatches before taking
   on a large existing `Any` inventory.
