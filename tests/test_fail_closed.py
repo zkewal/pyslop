@@ -81,6 +81,44 @@ def test_missing_engine_binary_is_exit_2(
     assert f"{engine} binary not found" in captured.err
 
 
+def test_ruff_crash_in_second_config_group_is_exit_2(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configured = tmp_path / "configured"
+    configured.mkdir()
+    (configured / "ruff.toml").write_text('[lint]\nselect = ["E"]\n')
+    (configured / "a.py").write_text("x = 1\n")
+    (tmp_path / "b.py").write_text("y = 1\n")
+    results = iter(
+        [
+            subprocess.CompletedProcess([], 0, "[]", ""),
+            subprocess.CompletedProcess([], 2, "", "boom"),
+        ]
+    )
+
+    def _fake_run(
+        _cmd: list[str], **_: object
+    ) -> subprocess.CompletedProcess[str]:  # SAFETY: test double
+        return next(results)
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    code = main(
+        [
+            "check",
+            str(configured / "a.py"),
+            str(tmp_path / "b.py"),
+            "--format",
+            "json",
+            "--only",
+            "ruff",
+        ]
+    )
+    assert code == 2
+    assert capsys.readouterr().out == ""
+
+
 def test_init_on_unparsable_pyproject_is_exit_2_and_writes_nothing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -234,18 +234,10 @@ def _consumer_ruff_configured(start: Path) -> bool:
     return False
 
 
-def ruff_config_args(paths: list[str]) -> list[str]:
-    """--config shipped unless the consumer has its own ruff config."""
-    if _consumer_ruff_configured(_start(paths)):
-        return []
-    return ["--config", str(bundled("config", "ruff.toml"))]
-
-
-def run_ruff(paths: list[str], *, fix: bool) -> tuple[list[Finding], int]:
-    """Run ruff check, mapped to findings. Returns (findings, fatal_exit)."""
-    binary = require_binary("ruff")
-    if binary is None:
-        return [], 2
+def _ruff_group(
+    binary: str, paths: list[str], *, configured: bool, fix: bool
+) -> tuple[list[Finding], int]:
+    """One ruff run over paths sharing a config decision."""
     # --force-exclude: pre-commit passes file names, and ruff otherwise
     # drops the consumer's exclude for explicitly named files.
     cmd = [
@@ -254,8 +246,9 @@ def run_ruff(paths: list[str], *, fix: bool) -> tuple[list[Finding], int]:
         "--output-format",
         "json",
         "--force-exclude",
-        *ruff_config_args(paths),
     ]
+    if not configured:
+        cmd.extend(["--config", str(bundled("config", "ruff.toml"))])
     if fix:
         cmd.append("--fix")
     proc = subprocess.run([*cmd, *paths], capture_output=True, text=True, check=False)
@@ -283,6 +276,39 @@ def run_ruff(paths: list[str], *, fix: bool) -> tuple[list[Finding], int]:
         }
         for item in raw
     ], 0
+
+
+def run_ruff(paths: list[str], *, fix: bool) -> tuple[list[Finding], int]:
+    """Run ruff check, mapped to findings. Returns (findings, fatal_exit).
+
+    Each path is judged by the ruff config that applies to it: paths with a
+    consumer config run without `--config` so ruff discovers per file, the
+    rest run with the shipped profile. At most two runs, one per group.
+    Empty paths keeps the single cwd-based run.
+    """
+    binary = require_binary("ruff")
+    if binary is None:
+        return [], 2
+    # ponytail: one directory path whose subtree mixes configured and
+    # unconfigured subprojects still uses one decision for that directory.
+    if paths:
+        groups: dict[bool, list[str]] = {True: [], False: []}
+        for path in paths:
+            groups[_consumer_ruff_configured(Path(path).resolve())].append(path)
+        runs = [(groups[configured], configured) for configured in (True, False)]
+    else:
+        runs = [([], _consumer_ruff_configured(Path.cwd()))]
+    findings: list[Finding] = []
+    for group, configured in runs:
+        if not group and paths:
+            continue
+        group_findings, fatal = _ruff_group(
+            binary, group, configured=configured, fix=fix
+        )
+        if fatal:
+            return [], fatal
+        findings.extend(group_findings)
+    return findings, 0
 
 
 PYSLOP_BLOCK = """[tool.pyslop]
