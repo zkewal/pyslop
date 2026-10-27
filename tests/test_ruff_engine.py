@@ -125,6 +125,30 @@ def test_consumer_ruff_exclude_applies_to_named_files(
     assert json.loads(capsys.readouterr().out) == []
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+def test_each_path_uses_its_own_ruff_config(
+    *, reverse: bool, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    configured = tmp_path / "configured"
+    configured.mkdir()
+    (configured / "ruff.toml").write_text('[lint]\nselect = ["PTH"]\n')
+    (configured / "a.py").write_text('open("x")\n')
+    unconfigured = tmp_path / "unconfigured"
+    unconfigured.mkdir()
+    shutil.copy(FIXTURES / "ann.py", unconfigured / "b.py")
+    paths = [str(configured / "a.py"), str(unconfigured / "b.py")]
+    if reverse:
+        paths.reverse()
+    code = main(["check", *paths, "--format", "json", "--only", "ruff"])
+    findings = json.loads(capsys.readouterr().out)
+    assert code == 1
+    assert sorted((Path(f["file"]).parent.name, f["rule"]) for f in findings) == [
+        ("configured", "PTH123"),
+        ("unconfigured", "ANN201"),
+        ("unconfigured", "ANN401"),
+    ]
+
+
 def test_engines_report_one_path_form_per_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
