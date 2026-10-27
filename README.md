@@ -38,7 +38,10 @@ pyslop format                       # ruff format
 pyslop init                         # vendor rules + configs into a repo (see skills/install-pyslop)
 ```
 
-Exit code is 1 when any error-severity finding exists, 0 otherwise.
+Exit code is 1 when any error-severity finding exists, 0 otherwise, and 2 when
+pyslop itself cannot give a trustworthy answer: an engine is missing or crashes,
+its output does not parse, or a flag combination would run nothing. Exit 2
+prints no findings, so a broken run is never mistaken for a clean one.
 `pyslop render` reads one findings JSON array from stdin and renders it with
 the same formats and exit rule; `--format github` emits one `::error` or
 `::warning` workflow command per finding (actions/toolkit escaping, stable
@@ -47,7 +50,7 @@ sort, no summary line).
 ## Rules
 
 ruff carries what it already has ([shipped config](docs/config/ruff.md), ty runs strict
-([shipped config](docs/config/ty.md)); pyslop adds the gaps as ast-grep rules:
+([shipped config](docs/config/ty.md)); pyslop adds the gaps as ast-grep rules, plus one config check of its own:
 
 | Rule | What it flags |
 | ---- | ------------- |
@@ -60,7 +63,7 @@ ruff carries what it already has ([shipped config](docs/config/ruff.md), ty runs
 | `pyslop/no-kwargs-passthrough` | `**kwargs` without `Unpack[SomeTypedDict]` in public signatures |
 | `pyslop/no-dict-any` | `dict[str, Any]` / `Mapping[str, Any]` in signatures |
 | `pyslop/no-module-mocking` | `patch("dotted.path")` / `monkeypatch.setattr("dotted.path", …)` / `delattr` / `patch.multiple` |
-| `pyslop/deviation-needs-reason` | config overrides that dodge a rule without a reason |
+| `pyslop/deviation-needs-reason` | config overrides that dodge a rule without a reason (runner check, not ast-grep) |
 
 Each rule has rationale and bad/good examples under [docs/rules](docs/rules/).
 
