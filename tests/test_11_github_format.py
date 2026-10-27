@@ -211,6 +211,56 @@ def test_render_rejects_bad_input(
         assert "render" in err
 
 
+@pytest.mark.parametrize("fix_hint", [False, 123, {}])
+def test_render_rejects_non_text_fix_hint(
+    fix_hint: object,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    payload = json.dumps(
+        [
+            {
+                "engine": "ty",
+                "rule": "ty/unresolved-import",
+                "file": "pkg_a/bad.py",
+                "line": 2,
+                "col": 1,
+                "message": "Cannot find import",
+                "fix_hint": fix_hint,
+                "severity": "warning",
+            }
+        ]
+    )
+    code, out, err = _render(monkeypatch, capsys, payload, ["--format", "github"])
+    assert code == 2
+    assert out == ""
+    assert "fix_hint" in err
+
+
+def test_render_accepts_text_null_and_absent_fix_hint(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    base = {
+        "engine": "ty",
+        "rule": "ty/unresolved-import",
+        "file": "pkg_a/bad.py",
+        "line": 2,
+        "col": 1,
+        "message": "Cannot find import",
+        "severity": "warning",
+    }
+    cases = [
+        ({**base, "fix_hint": "use x"}, "use x"),
+        ({**base, "fix_hint": None}, ""),
+        (base, ""),
+    ]
+    for finding, expected in cases:
+        payload = json.dumps([finding])
+        code, out, _ = _render(monkeypatch, capsys, payload, ["--format", "json"])
+        assert code == 0
+        assert json.loads(out)[0]["fix_hint"] == expected
+
+
 def test_check_render_equivalence(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

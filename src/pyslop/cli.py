@@ -849,6 +849,12 @@ def _render_finding(item: object, index: int) -> Finding:
     if type(line) is not int or type(col) is not int:  # bool is not a line
         detail = f"finding {index} has no integer line/col"
         raise _RenderInputError(detail)
+    fix_hint = item.get("fix_hint")
+    if fix_hint is None:
+        fix_hint = ""
+    elif not isinstance(fix_hint, str):
+        detail = f"finding {index} has non-text field 'fix_hint'"
+        raise _RenderInputError(detail)
     return Finding(
         engine=item["engine"],
         rule=item["rule"],
@@ -856,7 +862,7 @@ def _render_finding(item: object, index: int) -> Finding:
         line=line,
         col=col,
         message=item["message"],
-        fix_hint=str(item.get("fix_hint") or ""),
+        fix_hint=fix_hint,
         severity=item["severity"],
     )
 
