@@ -23,11 +23,11 @@ rule:
             field: function
             regex: "^(\\w+\\.)*patch(\\.multiple)?$"
         - matches: first-arg-dotted
-    # patch(target="a.b")
+    # patch(target="a.b"), patch.multiple(target="a.b")
     - all:
         - has:
             field: function
-            regex: "^(\\w+\\.)*patch$"
+            regex: "^(\\w+\\.)*patch(\\.multiple)?$"
         - has:
             field: arguments
             has:

@@ -264,6 +264,33 @@ snapshots:
       start: 15
       end: 26
   ? |
+    patch.multiple(target="my.module", func=DEFAULT)
+  : labels:
+    - source: patch.multiple(target="my.module", func=DEFAULT)
+      style: primary
+      start: 0
+      end: 48
+    - source: patch.multiple
+      style: secondary
+      start: 0
+      end: 14
+    - source: target
+      style: secondary
+      start: 15
+      end: 21
+    - source: '"my.module"'
+      style: secondary
+      start: 22
+      end: 33
+    - source: target="my.module"
+      style: secondary
+      start: 15
+      end: 33
+    - source: target="my.module"
+      style: secondary
+      start: 15
+      end: 33
+  ? |
     um.patch("my.module.func")
   : labels:
     - source: um.patch("my.module.func")
